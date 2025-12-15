@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { startBotAction, checkBotStatus } from "@/actions/bot";
 import { Business } from "@/lib/types";
