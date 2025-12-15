@@ -9,6 +9,7 @@ export interface Business {
     isTarget: boolean;
     status?: "new" | "contacted";
     lastContactedAt?: string;
+    savedAt?: string;
 }
 
 export interface BusinessCategory {

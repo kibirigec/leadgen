@@ -5,19 +5,21 @@ const MOCK_DB: Business[] = [
         id: "1",
         name: "Cafe Javas",
         category: "Restaurant",
-        phone: "+256 772 123456",
+        phone: "+256 700 123456",
         website: "https://cafejavas.co.ug",
-        address: "Ntinda Complex, Kampala",
-        location: "Ntinda",
+        address: "Kampala Road",
+        location: "Kampala",
+        isTarget: false
     },
     {
         id: "2",
-        name: "Mama Ashanti",
-        category: "Restaurant",
-        phone: "+256 700 987654",
+        name: "Local Plumber",
+        category: "Plumber",
+        phone: "+256 772 987654",
         website: null,
-        address: "Kyambogo Road, Ntinda",
+        address: "Ntinda",
         location: "Ntinda",
+        isTarget: true
     },
     {
         id: "3",
@@ -27,6 +29,7 @@ const MOCK_DB: Business[] = [
         website: "https://capitalkitchen.com",
         address: "Ntinda Shopping Centre",
         location: "Ntinda",
+        isTarget: false
     },
     {
         id: "4",
@@ -36,6 +39,7 @@ const MOCK_DB: Business[] = [
         website: null,
         address: "Stretcher Road, Ntinda",
         location: "Ntinda",
+        isTarget: true
     },
     {
         id: "5",
@@ -45,6 +49,7 @@ const MOCK_DB: Business[] = [
         website: "https://kfc.ug",
         address: "Ntinda Road",
         location: "Ntinda",
+        isTarget: false
     },
     {
         id: "6",
@@ -54,6 +59,7 @@ const MOCK_DB: Business[] = [
         website: null,
         address: "Kisaasi Road, Ntinda",
         location: "Ntinda",
+        isTarget: true
     }
 ];
 
