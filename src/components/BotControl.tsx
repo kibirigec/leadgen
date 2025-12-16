@@ -26,14 +26,18 @@ export function BotControl({ leads }: BotControlProps) {
     if (loading) {
         interval = setInterval(async () => {
             const botStatus = await checkBotStatus();
+            console.log("Polling Status:", botStatus.status, botStatus.qrCode ? "QR Present" : "No QR");
+            
             if (botStatus.status === 'waiting_for_scan' && botStatus.qrCode) {
                 setQrCode(botStatus.qrCode);
                 setStatus("Please scan the QR code below.");
             } else if (botStatus.status === 'idle') {
                 // Bot finished or reset
                 setQrCode(null);
+            } else if (botStatus.status === 'error') {
+                 setStatus("Bot encountered an error. Check logs.");
             }
-        }, 3000);
+        }, 1000); // Poll every 1 second
     }
     return () => clearInterval(interval);
   }, [loading]);
