@@ -166,6 +166,11 @@ export function DashboardClient({ initialLeads }: DashboardClientProps) {
                      </div>
                      <p className="text-[10px] text-gray-500 mt-1 font-medium animate-pulse">Scan to Login</p>
                  </div>
+             ) : botRunning ? (
+                 <div className="flex flex-col items-center justify-center text-green-600">
+                     <Loader2 className="w-8 h-8 mb-2 animate-spin" />
+                     <span className="text-xs font-medium">Initializing...</span>
+                 </div>
              ) : (
                  <div className="flex flex-col items-center justify-center text-gray-300">
                      <QrCode className="w-8 h-8 mb-2 opacity-20" />
