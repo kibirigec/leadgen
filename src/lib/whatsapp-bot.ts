@@ -13,10 +13,19 @@ export async function runWhatsAppBot(
 
     const isDocker = process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD === 'true';
 
+    // Determine executable path:
+    // 1. Use env var if set (e.g. in Docker)
+    // 2. If on Mac, try standard Chrome path
+    // 3. Otherwise (Linux/Windows), let Puppeteer use its bundled Chromium (undefined)
+    let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    if (!executablePath && process.platform === 'darwin') {
+        executablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    }
+
     const browser = await puppeteer.launch({
         headless: isDocker ? true : false, // Headless in Docker, visible locally
         userDataDir: "./.wweb_session",
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        executablePath: executablePath, // Undefined means use bundled Chromium
         args: isDocker ? [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -24,9 +33,12 @@ export async function runWhatsAppBot(
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process', // <- this one doesn't works in Windows
+            '--single-process',
             '--disable-gpu'
-        ] : []
+        ] : [
+            '--no-sandbox', // Often needed on Linux even with GUI
+            '--disable-setuid-sandbox'
+        ]
     });
 
     const page = await browser.newPage();
