@@ -28,8 +28,10 @@ export function BotControl({ leads }: BotControlProps) {
     const interval = setInterval(async () => {
         const botStatus = await checkBotStatus();
         console.log("Polling Result:", JSON.stringify(botStatus, null, 2));
+        console.log("Status check:", botStatus.status, "| QR exists:", !!botStatus.qrCode);
         
         if (botStatus.status === 'waiting_for_scan' && botStatus.qrCode) {
+            console.log("✅ Setting QR code!");
             setQrCode(botStatus.qrCode);
             setStatus("Please scan the QR code below.");
         } else if (botStatus.status === 'logged_in') {
@@ -44,6 +46,8 @@ export function BotControl({ leads }: BotControlProps) {
              setStatus("Bot encountered an error. Check logs.");
              setBotRunning(false);
              setLoading(false);
+        } else {
+            console.log("⚠️ Unhandled status:", botStatus.status);
         }
     }, 1000); // Poll every 1 second
 
@@ -65,7 +69,7 @@ export function BotControl({ leads }: BotControlProps) {
     setLoading(true);
     setBotRunning(true);
     setQrCode(null);
-    setStatus("Bot is starting... This may take a moment.");
+    setStatus("Chrome window opening... Scan QR code there!");
 
     // Fire and forget - don't await completion to block UI updates
     startBotAction(leads).then((result) => {

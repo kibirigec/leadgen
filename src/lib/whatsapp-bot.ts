@@ -13,38 +13,52 @@ export async function runWhatsAppBot(
 ) {
     console.log("Starting WhatsApp Automation Bot (Strict Mode)...");
 
-    // 1. Launch Configuration (MANDATORY)
-    const launchConfig = {
-        headless: "new" as any, // Cast to any to bypass strict type check (TS expects boolean | "shell")
-        userDataDir: "/app/.wweb_session", // Exact path requested
-        args: [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-gpu",
-            "--disable-software-rasterizer",
-            "--disable-accelerated-2d-canvas",
-            "--disable-accelerated-video-decode",
-            "--disable-accelerated-video-encode",
-            "--disable-dev-shm-usage",
-            "--no-zygote",
-            "--single-process",
-            "--disable-background-networking",
-            "--disable-sync",
-            "--disable-notifications",
-            "--disable-push-api",
-            "--disable-component-update",
-        ],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH // Respect env var if set
+    // 1. Launch Configuration
+    // Use HEADFUL mode locally so user can scan QR directly from Chrome window
+    // Use HEADLESS mode in production (Docker) where QR is sent to frontend
+    const isLocalDev = !fs.existsSync("/app");
+
+    // Different args for local vs Docker - some args crash Chrome on macOS
+    const dockerArgs = [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--disable-accelerated-2d-canvas",
+        "--disable-accelerated-video-decode",
+        "--disable-accelerated-video-encode",
+        "--disable-dev-shm-usage",
+        "--no-zygote",
+        "--single-process",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-notifications",
+        "--disable-push-api",
+        "--disable-component-update",
+    ];
+
+    const localArgs = [
+        "--disable-notifications",
+        "--disable-popup-blocking",
+    ];
+
+    const launchConfig: any = {
+        headless: isLocalDev ? false : "new",
+        userDataDir: isLocalDev
+            ? path.resolve(process.cwd(), ".wweb_session")
+            : "/app/.wweb_session",
+        args: isLocalDev ? localArgs : dockerArgs,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
     };
 
-    // Fallback for local dev (if /app doesn't exist)
-    if (!fs.existsSync("/app")) {
-        console.log("Local environment detected. Adjusting userDataDir...");
-        launchConfig.userDataDir = path.resolve(process.cwd(), ".wweb_session");
-        // On Mac, we might need to set executable path if not in env
+    // On Mac, set Chrome path if not in env
+    if (isLocalDev) {
+        console.log("🖥️  LOCAL MODE: Chrome window will open - scan QR code there!");
         if (!launchConfig.executablePath && process.platform === 'darwin') {
             launchConfig.executablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
         }
+    } else {
+        console.log("🐳 DOCKER MODE: Running headless, QR sent to frontend.");
     }
 
     let browser;
@@ -71,16 +85,9 @@ export async function runWhatsAppBot(
         throw new Error("Page load timeout (120s)");
     }
 
-    // 3. Login Detection & QR Handling (CRITICAL)
+    // 3. Login Detection & QR Handling (CRITICAL - FIXED RACE CONDITION)
     try {
         console.log("Waiting for login indicators or QR code...");
-
-        // Race condition: Login Success vs QR Code
-        const loginSuccess = Promise.race([
-            page.waitForSelector('[data-testid="chat-list"]', { timeout: 120000 }).then(() => 'success'),
-            page.waitForSelector('div[aria-label="Type a message"]', { timeout: 120000 }).then(() => 'success'),
-            page.waitForSelector('button[aria-label="Send"]', { timeout: 120000 }).then(() => 'success'),
-        ]);
 
         // We also check for session directory existence as a hint
         const sessionExists = fs.existsSync(path.join(launchConfig.userDataDir, 'Default'));
@@ -88,35 +95,86 @@ export async function runWhatsAppBot(
             console.log("Session directory found. Expecting restoration...");
         }
 
-        // Actually, the prompt says: "If a <canvas> element is detected, you must: Pause execution, Wait until login indicators appear".
-        // So we should set up a listener or just wait for login, but IF QR appears, we export it.
+        // Flag to control the QR polling loop
+        let isLoggedIn = false;
+        let lastQrDataUrl: string | null = null;
 
-        // Let's try a different approach: Wait for login indicators primarily.
-        // But concurrently check for QR to update status.
+        // Continuous QR polling function - runs until login is detected
+        const pollForQR = async (): Promise<void> => {
+            console.log("Starting QR code polling loop...");
+            while (!isLoggedIn) {
+                try {
+                    // Check if canvas exists (quick check, don't wait long)
+                    const canvas = await page.$('canvas');
+                    if (canvas) {
+                        const qrDataUrl = await page.evaluate(() => {
+                            const c = document.querySelector('canvas');
+                            return c ? c.toDataURL() : null;
+                        });
 
-        const checkForQR = async () => {
-            try {
-                const canvas = await page.waitForSelector('canvas', { timeout: 10000 }); // Check quickly
-                if (canvas) {
-                    console.log("QR Code detected!");
-                    const qrDataUrl = await page.evaluate(() => {
-                        const c = document.querySelector('canvas');
-                        return c ? c.toDataURL() : null;
-                    });
-                    if (qrDataUrl && onStatusUpdate) {
-                        await onStatusUpdate({ status: "waiting_for_scan", qrCode: qrDataUrl });
+                        // Only update if QR changed (avoid spamming Firestore)
+                        if (qrDataUrl && qrDataUrl !== lastQrDataUrl) {
+                            console.log("QR Code detected! Updating Firestore...");
+                            lastQrDataUrl = qrDataUrl;
+                            if (onStatusUpdate) {
+                                await onStatusUpdate({ status: "waiting_for_scan", qrCode: qrDataUrl });
+                            }
+                        }
                     }
+                } catch (e) {
+                    // Ignore errors in QR check - page might be navigating
                 }
-            } catch (e) {
-                // No QR found in short check, ignore
+
+                // Wait 2 seconds before next check (if not logged in yet)
+                if (!isLoggedIn) {
+                    await new Promise(r => setTimeout(r, 2000));
+                }
             }
+            console.log("QR polling loop ended (login detected).");
         };
 
-        // Start QR check in background (non-blocking)
-        checkForQR();
+        // Login detection promise - using multiple selector strategies
+        const waitForLogin = async (): Promise<string> => {
+            console.log("Waiting for any login indicator...");
 
-        // STRICT WAIT for Login
-        await loginSuccess;
+            // Multiple possible selectors for logged-in state
+            const loginSelectors = [
+                '[data-testid="chat-list"]',
+                '[data-testid="conversation-panel-wrapper"]',
+                'div[aria-label="Type a message"]',
+                '[contenteditable="true"][data-tab="10"]',
+                'div[data-testid="cell-frame-container"]',
+                '#side', // Main sidebar panel
+                'div[data-testid="chatlist-header"]',
+            ];
+
+            // Try each selector
+            const selectorPromises = loginSelectors.map((selector, index) =>
+                page.waitForSelector(selector, { timeout: 120000 })
+                    .then(() => {
+                        console.log(`✅ Login detected via selector ${index + 1}: ${selector}`);
+                        return 'success';
+                    })
+                    .catch(() => null)
+            );
+
+            const result = await Promise.race(selectorPromises);
+            if (result === 'success') {
+                return 'success';
+            }
+
+            // If all fail, throw
+            throw new Error("No login indicators found");
+        };
+
+        // Run QR polling and login detection in parallel
+        // pollForQR runs continuously, waitForLogin resolves when logged in
+        const qrPollingPromise = pollForQR();
+        const loginResult = await waitForLogin();
+
+        // Signal the polling loop to stop
+        isLoggedIn = true;
+
         console.log("Login indicators detected. Login successful.");
         if (onStatusUpdate) await onStatusUpdate({ status: "logged_in", qrCode: null });
 
@@ -153,56 +211,95 @@ export async function runWhatsAppBot(
         await page.goto(url);
 
         try {
-            // Required sequence from prompt:
-            // 1. Wait for Type a message
-            await page.waitForSelector('div[aria-label="Type a message"]', { timeout: 60000 });
+            console.log("Waiting for message input box...");
 
-            // 2. Type message (The prompt says "await page.type...", but we need the message content)
-            // We already have the message in the URL, but if it didn't populate, we type it.
-            // The prompt explicitly says: "await page.type('div[aria-label="Type a message"]', message, { delay: 30 });"
-            // This implies we MUST type it. But if it's already there?
-            // The prompt says "You must send messages using aria-label selectors only... Required sequence: ... await page.type..."
-            // It seems to mandate typing.
+            // Multiple possible selectors for the message input
+            const inputSelectors = [
+                'div[aria-label="Type a message"]',
+                '[contenteditable="true"][data-tab="10"]',
+                'div[data-testid="conversation-compose-box-input"]',
+                'footer div[contenteditable="true"]',
+            ];
 
-            const message = `Hi 👋\n\nI came across ${lead.name} on Google — very nice place!\n\nI noticed you don’t have a website, which might be costing you customers who try to find you online.\n\nI help local businesses get a simple site + automated chat that replies to customers after hours and brings in more inquiries.\n\nWould you be open to seeing a free demo made specifically for ${lead.name}?\n\nYou can also check us out at weblery.com`;
+            let inputBox = null;
+            let usedSelector = '';
+            for (const selector of inputSelectors) {
+                try {
+                    inputBox = await page.waitForSelector(selector, { timeout: 10000 });
+                    if (inputBox) {
+                        usedSelector = selector;
+                        console.log(`✅ Input box found: ${selector}`);
+                        break;
+                    }
+                } catch (e) {
+                    // Try next selector
+                }
+            }
 
-            // Check if empty first to avoid double typing? 
-            // The prompt is strict: "You must follow ALL instructions exactly."
-            // "Required sequence: ... await page.type ..."
-            // I will clear the field first just in case, or just type.
-            // But wait, if I type, I might append to the pre-filled message.
-            // I'll check if it's empty. If not empty, I assume it's pre-filled.
-            // BUT the prompt says "Required sequence". I will assume the prompt implies "If you need to send a message, do this".
-            // Since the URL pre-fills it, typing might duplicate.
-            // However, the user's previous issue was "Message not auto-populated".
-            // So I will implement the check, and IF empty, use the strict typing sequence.
+            if (!inputBox) {
+                throw new Error("Could not find message input box");
+            }
 
-            const inputBoxSelector = 'div[aria-label="Type a message"]';
+            // Type the message
+            const message = `Hi 👋\n\nI came across ${lead.name} on Google — very nice place!\n\nI noticed you don't have a website, which might be costing you customers who try to find you online.\n\nI help local businesses get a simple site + automated chat that replies to customers after hours and brings in more inquiries.\n\nWould you be open to seeing a free demo made specifically for ${lead.name}?\n\nYou can also check us out at weblery.com`;
+
+            // Check if message is already populated from URL
             const isPopulated = await page.evaluate((sel) => {
                 const el = document.querySelector(sel) as HTMLElement;
                 return el && el.innerText.trim().length > 0;
-            }, inputBoxSelector);
+            }, usedSelector);
 
             if (!isPopulated) {
-                console.log("Typing message manually (Strict Mode)...");
-                await page.type(inputBoxSelector, message, { delay: 30 });
+                console.log("Typing message...");
+                await inputBox.click();
+                await page.keyboard.type(message, { delay: 20 });
+            } else {
+                console.log("Message already populated from URL");
             }
 
-            // 3. Wait for Send button
-            await page.waitForSelector('button[aria-label="Send"]', { timeout: 30000 });
+            // Wait a moment for UI to update
+            await new Promise(r => setTimeout(r, 500));
 
-            // 4. Click Send
-            await page.click('button[aria-label="Send"]');
+            // Find and click send button
+            console.log("Looking for send button...");
+            const sendSelectors = [
+                'button[aria-label="Send"]',
+                'span[data-icon="send"]',
+                'button[data-testid="send"]',
+                '[data-testid="compose-btn-send"]',
+            ];
 
-            console.log("Message sent.");
+            let sent = false;
+            for (const selector of sendSelectors) {
+                try {
+                    const sendBtn = await page.$(selector);
+                    if (sendBtn) {
+                        console.log(`✅ Send button found: ${selector}`);
+                        await sendBtn.click();
+                        sent = true;
+                        break;
+                    }
+                } catch (e) {
+                    // Try next
+                }
+            }
+
+            // Fallback: try pressing Enter
+            if (!sent) {
+                console.log("Send button not found, pressing Enter...");
+                await page.keyboard.press('Enter');
+                sent = true;
+            }
+
+            console.log("✅ Message sent!");
             sentCount++;
             contactedLeadIds.push(lead.id);
 
-            // Wait a bit before next
+            // Wait before next message
             await new Promise(r => setTimeout(r, 3000));
 
         } catch (e) {
-            console.error(`Failed to send to ${lead.name}:`, e);
+            console.error(`❌ Failed to send to ${lead.name}:`, e);
         }
     }
 
