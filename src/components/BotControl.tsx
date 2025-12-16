@@ -15,6 +15,7 @@ export function BotControl({ leads }: BotControlProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   // Client-side filter to show accurate count
   const newLeads = leads.filter(l => l.phone && l.status !== 'contacted');
