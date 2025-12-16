@@ -2,7 +2,10 @@ import puppeteer from 'puppeteer';
 import { Business } from './types';
 import { createWhatsAppLink } from './utils';
 
-export async function runWhatsAppBot(leads: Business[], onQrCode?: (qr: string) => Promise<void>) {
+export async function runWhatsAppBot(
+    leads: Business[],
+    onStatusUpdate?: (data: { status: string, qrCode?: string | null, screenshot?: string | null }) => Promise<void>
+) {
     console.log("Starting WhatsApp Automation Bot...");
 
     const isDocker = process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD === 'true';
@@ -25,7 +28,11 @@ export async function runWhatsAppBot(leads: Business[], onQrCode?: (qr: string) 
 
     const page = await browser.newPage();
 
+    // Set a real User Agent to avoid being blocked by WhatsApp Web
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
     // 1. Login Phase
+    if (onStatusUpdate) await onStatusUpdate({ status: "starting" });
     console.log("Please scan the QR code if not logged in...");
 
     try {
@@ -66,9 +73,9 @@ export async function runWhatsAppBot(leads: Business[], onQrCode?: (qr: string) 
                 return canvas ? canvas.toDataURL() : null;
             });
 
-            if (qrDataUrl && onQrCode) {
+            if (qrDataUrl && onStatusUpdate) {
                 console.log("Exporting QR Code...");
-                await onQrCode(qrDataUrl);
+                await onStatusUpdate({ status: "waiting_for_scan", qrCode: qrDataUrl });
             }
 
             // Wait for login to complete after QR scan
@@ -77,8 +84,19 @@ export async function runWhatsAppBot(leads: Business[], onQrCode?: (qr: string) 
         }
 
         console.log("Logged in successfully!");
+        if (onStatusUpdate) await onStatusUpdate({ status: "logged_in", qrCode: null });
     } catch (e) {
         console.error("Login Phase Error Details:", e);
+
+        // Capture screenshot for debugging
+        const screenshot = await page.screenshot({ encoding: 'base64' });
+        if (onStatusUpdate) {
+            await onStatusUpdate({
+                status: "error",
+                screenshot: `data:image/png;base64,${screenshot}`
+            });
+        }
+
         console.log("Login timed out or failed. Please try again.");
         await browser.close();
         throw new Error("Login failed: " + (e instanceof Error ? e.message : String(e)));

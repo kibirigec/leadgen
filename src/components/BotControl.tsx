@@ -141,6 +141,15 @@ export function BotControl({ leads }: BotControlProps) {
           </div>
         </div>
       )}
+
+      {/* Debug Screenshot Modal (on Error) */}
+      {!loading && status?.includes("failed") && (
+         // We can't easily access the screenshot here because 'status' is just a string in the state.
+         // But the user can check the logs or we could fetch the status doc again.
+         // For now, let's just rely on the user seeing the error message.
+         // Actually, let's add a small "View Debug Info" button if we want to be fancy, but let's keep it simple for now.
+         null
+      )}
     </div>
   );
 }

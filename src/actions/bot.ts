@@ -28,13 +28,12 @@ export async function startBotAction(leads: Business[]) {
             updatedAt: new Date().toISOString()
         });
 
-        const result = await runWhatsAppBot(validLeads, async (qrCode) => {
-            console.log("Received QR Code, saving to DB...");
+        const result = await runWhatsAppBot(validLeads, async (data) => {
+            console.log("Bot Status Update:", data.status);
             await db.collection("system").doc("bot_status").set({
-                status: "waiting_for_scan",
-                qrCode: qrCode,
+                ...data,
                 updatedAt: new Date().toISOString()
-            });
+            }, { merge: true });
         });
 
         // Clear status on finish
