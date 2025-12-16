@@ -12,6 +12,7 @@ interface BotControlProps {
 
 export function BotControl({ leads }: BotControlProps) {
   const [loading, setLoading] = useState(false);
+  const [botRunning, setBotRunning] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -20,27 +21,34 @@ export function BotControl({ leads }: BotControlProps) {
   const newLeads = leads.filter(l => l.phone && l.status !== 'contacted');
   const newLeadsCount = newLeads.length;
 
-  // Polling for QR Code
+  // Polling for QR Code - Tied to botRunning
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (loading) {
-        interval = setInterval(async () => {
-            const botStatus = await checkBotStatus();
-            console.log("Polling Result:", JSON.stringify(botStatus, null, 2));
-            
-            if (botStatus.status === 'waiting_for_scan' && botStatus.qrCode) {
-                setQrCode(botStatus.qrCode);
-                setStatus("Please scan the QR code below.");
-            } else if (botStatus.status === 'idle') {
-                // Bot finished or reset
-                setQrCode(null);
-            } else if (botStatus.status === 'error') {
-                 setStatus("Bot encountered an error. Check logs.");
-            }
-        }, 1000); // Poll every 1 second
-    }
+    if (!botRunning) return;
+
+    const interval = setInterval(async () => {
+        const botStatus = await checkBotStatus();
+        console.log("Polling Result:", JSON.stringify(botStatus, null, 2));
+        
+        if (botStatus.status === 'waiting_for_scan' && botStatus.qrCode) {
+            setQrCode(botStatus.qrCode);
+            setStatus("Please scan the QR code below.");
+        } else if (botStatus.status === 'logged_in') {
+            setQrCode(null);
+            setStatus("Logged in! Sending messages...");
+        } else if (botStatus.status === 'idle') {
+            // Bot finished or reset
+            setQrCode(null);
+            setBotRunning(false);
+            setLoading(false);
+        } else if (botStatus.status === 'error') {
+             setStatus("Bot encountered an error. Check logs.");
+             setBotRunning(false);
+             setLoading(false);
+        }
+    }, 1000); // Poll every 1 second
+
     return () => clearInterval(interval);
-  }, [loading]);
+  }, [botRunning]);
 
   const handleStartClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -55,49 +63,52 @@ export function BotControl({ leads }: BotControlProps) {
   const handleConfirm = async () => {
     setShowConfirm(false);
     setLoading(true);
+    setBotRunning(true);
     setQrCode(null);
     setStatus("Bot is starting... This may take a moment.");
 
-    try {
-      const result = await startBotAction(leads);
-      
-      if (result.success) {
-        setStatus(`Bot finished! Sent ${result.count} messages.`);
-      } else {
-        setStatus(`Bot failed: ${result.error}`);
-      }
-    } catch (error) {
-      setStatus("An error occurred while running the bot.");
-      console.error("Bot execution error:", error);
-    } finally {
-      setLoading(false);
-      setQrCode(null);
-    }
+    // Fire and forget - don't await completion to block UI updates
+    startBotAction(leads).then((result) => {
+        if (result.success) {
+            setStatus(`Bot finished! Sent ${result.count} messages.`);
+        } else {
+            setStatus(`Bot failed: ${result.error}`);
+        }
+        setLoading(false);
+        setBotRunning(false);
+    }).catch((error) => {
+        setStatus("An error occurred while running the bot.");
+        console.error("Bot execution error:", error);
+        setLoading(false);
+        setBotRunning(false);
+    });
   };
 
   return (
-    <div className="flex items-center gap-4 relative">
-      {status && <span className="text-sm text-gray-600 animate-pulse">{status}</span>}
-      
-      <button
-        type="button"
-        onClick={handleStartClick}
-        disabled={loading || newLeadsCount === 0}
-        className="flex items-center gap-2 px-4 py-2 bg-transparent border border-green-600 text-gray-900 hover:bg-green-50 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        title={newLeadsCount === 0 ? "No new leads to contact" : "Start outreach"}
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Running Bot...
-          </>
-        ) : (
-          <>
-            <Bot className="w-4 h-4" />
-            Start Outreach Bot ({newLeadsCount})
-          </>
-        )}
-      </button>
+    <div className="relative">
+      <div className="flex items-center gap-4">
+        {status && <span className="text-sm text-gray-600 animate-pulse">{status}</span>}
+        
+        <button
+            type="button"
+            onClick={handleStartClick}
+            disabled={loading || newLeadsCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-transparent border border-green-600 text-gray-900 hover:bg-green-50 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            title={newLeadsCount === 0 ? "No new leads to contact" : "Start outreach"}
+        >
+            {loading ? (
+            <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Running Bot...
+            </>
+            ) : (
+            <>
+                <Bot className="w-4 h-4" />
+                Start Outreach Bot ({newLeadsCount})
+            </>
+            )}
+        </button>
+      </div>
 
       {/* Custom Confirmation Modal */}
       {showConfirm && (
@@ -127,7 +138,7 @@ export function BotControl({ leads }: BotControlProps) {
         </div>
       )}
 
-      {/* Persistent QR Code Section */}
+      {/* Persistent QR Code Section - Outside flex container */}
       {qrCode && (
         <div className="mt-4 p-4 bg-white rounded-xl shadow-xl border-4 border-red-500 w-64">
             <h3 className="text-sm font-bold text-gray-900 mb-2">Scan to Login</h3>
@@ -138,11 +149,6 @@ export function BotControl({ leads }: BotControlProps) {
               Open WhatsApp &gt; Linked Devices &gt; Link a Device
             </p>
         </div>
-      )}
-
-      {/* Debug Screenshot Modal (on Error) */}
-      {!loading && status?.includes("failed") && (
-         null
       )}
     </div>
   );
