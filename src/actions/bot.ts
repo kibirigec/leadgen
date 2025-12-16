@@ -30,10 +30,15 @@ export async function startBotAction(leads: Business[]) {
 
         const result = await runWhatsAppBot(validLeads, async (data) => {
             console.log("Bot Status Update:", data.status);
-            await db.collection("system").doc("bot_status").set({
-                ...data,
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
+            try {
+                await db.collection("system").doc("bot_status").set({
+                    ...data,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                console.log("Firestore updated successfully.");
+            } catch (dbError) {
+                console.error("Firestore update failed:", dbError);
+            }
         });
 
         // Clear status on finish
