@@ -5,6 +5,10 @@ const projectId = process.env.FIREBASE_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
+const formatPrivateKey = (key: string) => {
+    return key.replace(/\\n/g, "\n").replace(/^"|"$/g, "");
+}
+
 if (!admin.apps.length) {
     if (projectId && clientEmail && privateKey) {
         try {
@@ -12,7 +16,7 @@ if (!admin.apps.length) {
                 credential: admin.credential.cert({
                     projectId,
                     clientEmail,
-                    privateKey: privateKey.replace(/\\n/g, "\n"),
+                    privateKey: formatPrivateKey(privateKey),
                 }),
             });
         } catch (error) {
