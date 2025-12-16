@@ -129,17 +129,18 @@ export function BotControl({ leads }: BotControlProps) {
 
       {/* QR Code Modal */}
       {loading && qrCode && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full border border-gray-100 animate-in zoom-in-95 duration-200 flex flex-col items-center">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Scan QR Code</h3>
-            <p className="text-sm text-gray-600 mb-4 text-center">
-              Open WhatsApp on your phone, go to Linked Devices, and scan this code to log in.
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
+            {console.log("Rendering QR Modal with code length:", qrCode.length)}
+          <div className="bg-white rounded-xl p-8 max-w-sm w-full flex flex-col items-center shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Scan QR Code</h3>
+            <p className="text-gray-600 mb-6 text-center">
+              Open WhatsApp > Linked Devices > Link a Device
             </p>
-            <div className="bg-white p-2 rounded-lg border border-gray-200 mb-4">
-                <Image src={qrCode} alt="WhatsApp QR Code" width={250} height={250} unoptimized />
+            <div className="bg-white p-4 rounded-lg border-2 border-gray-200 mb-6">
+                <Image src={qrCode} alt="WhatsApp QR Code" width={256} height={256} unoptimized />
             </div>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="w-4 h-4 animate-spin" />
+            <div className="flex items-center gap-2 text-gray-500 font-medium">
+                <Loader2 className="w-5 h-5 animate-spin text-green-600" />
                 Waiting for scan...
             </div>
           </div>
