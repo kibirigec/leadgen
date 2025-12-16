@@ -129,7 +129,7 @@ export function BotControl({ leads }: BotControlProps) {
 
       {/* Persistent QR Code Section */}
       {qrCode && (
-        <div className="absolute top-full left-0 mt-4 p-4 bg-white rounded-xl shadow-xl border border-gray-200 w-64 z-50 animate-in fade-in slide-in-from-top-2">
+        <div className="mt-4 p-4 bg-white rounded-xl shadow-xl border-4 border-red-500 w-64">
             <h3 className="text-sm font-bold text-gray-900 mb-2">Scan to Login</h3>
             <div className="bg-white p-2 rounded-lg border border-gray-200 mb-2">
                 <Image src={qrCode} alt="WhatsApp QR Code" width={200} height={200} unoptimized className="w-full h-auto" />
