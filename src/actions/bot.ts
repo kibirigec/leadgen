@@ -57,6 +57,14 @@ export async function startBotAction(leads: Business[]) {
             } catch (dbError) {
                 console.error(`Failed to update lead ${leadId}:`, dbError);
             }
+        }, async (type, message, leadName) => {
+            // Log events to Firestore
+            await addBotLog(type, message, leadName);
+        }, async () => {
+            // Check if paused
+            const statusDoc = await db.collection("system").doc("bot_status").get();
+            const status = statusDoc.data()?.status;
+            return status === 'paused';
         });
 
         // Clear status on finish
@@ -104,5 +112,92 @@ export async function checkBotStatus() {
     } catch (error) {
         console.error("Error checking bot status:", error);
         return { status: "error" };
+    }
+}
+
+export async function pauseBotAction() {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("bot_status").set({
+            status: "paused",
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        await addBotLog("info", "Bot paused by user");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error pausing bot:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function resumeBotAction() {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("bot_status").set({
+            status: "running",
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        await addBotLog("info", "Bot resumed by user");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error resuming bot:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function stopBotAction() {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("bot_status").set({
+            status: "stopped",
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        await addBotLog("warning", "Bot stopped by user");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error stopping bot:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function addBotLog(type: "info" | "error" | "warning", message: string, leadName?: string) {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("bot_logs").collection("entries").add({
+            type,
+            message,
+            leadName: leadName || null,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error("Failed to add bot log:", error);
+    }
+}
+
+export async function getBotLogs(limit: number = 50) {
+    try {
+        const { db } = await import("@/lib/firebase");
+        const snapshot = await db.collection("system").doc("bot_logs").collection("entries")
+            .orderBy("timestamp", "desc")
+            .limit(limit)
+            .get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+        console.error("Error fetching bot logs:", error);
+        return [];
+    }
+}
+
+export async function clearBotLogs() {
+    try {
+        const { db } = await import("@/lib/firebase");
+        const snapshot = await db.collection("system").doc("bot_logs").collection("entries").get();
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error clearing bot logs:", error);
+        return { success: false, error: error.message };
     }
 }

@@ -3,14 +3,34 @@
 import { useState, useEffect } from "react";
 import { startBotAction, checkBotStatus } from "@/actions/bot";
 import { Business } from "@/lib/types";
-import { Bot, Loader2, Users, MessageCircle, LayoutDashboard, QrCode } from "lucide-react";
+import { Bot, Loader2, Users, MessageCircle, LayoutDashboard, QrCode, Activity, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { StatsCard } from "@/components/StatsCard";
 import { ScanButton } from "@/components/ScanButton";
 import { DashboardActions } from "@/components/DashboardActions";
 import Image from "next/image";
+import { clientDb } from "@/lib/firebase-client";
+import { doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
+import Link from "next/link";
 
 interface DashboardClientProps {
   initialLeads: Business[];
+}
+
+interface BotStatusData {
+  status: string;
+  currentLead?: string;
+  totalLeads?: number;
+  processedLeads?: number;
+  errorCount?: number;
+  updatedAt?: string;
+}
+
+interface LogEntry {
+  id: string;
+  type: "info" | "error" | "warning";
+  message: string;
+  leadName?: string;
+  timestamp: string;
 }
 
 export function DashboardClient({ initialLeads }: DashboardClientProps) {
@@ -20,6 +40,10 @@ export function DashboardClient({ initialLeads }: DashboardClientProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
+  
+  // Live status from Firebase
+  const [liveStatus, setLiveStatus] = useState<BotStatusData>({ status: "idle" });
+  const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
 
   // Calculate stats
   const totalLeads = leads.length;
@@ -27,7 +51,44 @@ export function DashboardClient({ initialLeads }: DashboardClientProps) {
   const contacted = leads.filter(l => l.status === "contacted").length;
   const newLeadsToContact = leads.filter(l => l.phone && l.status !== 'contacted').length;
 
-  // Polling for QR Code & Status
+  // Subscribe to live bot status
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(clientDb, "system", "bot_status"),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data() as BotStatusData;
+          setLiveStatus(data);
+          // Update botRunning based on live status
+          const isRunning = ["running", "starting", "waiting_for_scan", "paused"].includes(data.status);
+          setBotRunning(isRunning);
+          if (data.status === "waiting_for_scan" && (data as any).qrCode) {
+            setQrCode((data as any).qrCode);
+          } else if (data.status !== "waiting_for_scan") {
+            setQrCode(null);
+          }
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Subscribe to live logs (last 5)
+  useEffect(() => {
+    const logsQuery = query(
+      collection(clientDb, "system", "bot_logs", "entries"),
+      orderBy("timestamp", "desc"),
+      limit(5)
+    );
+    const unsubscribe = onSnapshot(logsQuery, (snapshot) => {
+      const entries = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LogEntry[];
+      setLiveLogs(entries);
+    });
+    return () => unsubscribe();
+  }, []);
   useEffect(() => {
     if (!botRunning) return;
 
@@ -157,27 +218,72 @@ export function DashboardClient({ initialLeads }: DashboardClientProps) {
           />
           <StatsCard label="Contacted" value={contacted} icon={LayoutDashboard} />
           
-          {/* Fourth Card: QR Code or Placeholder */}
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden h-[140px]">
-             {qrCode ? (
-                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-white p-2">
-                     <div className="relative w-24 h-24">
-                        <Image src={qrCode} alt="QR" fill className="object-contain" unoptimized />
-                     </div>
-                     <p className="text-[10px] text-gray-500 mt-1 font-medium animate-pulse">Scan to Login</p>
-                 </div>
-             ) : botRunning ? (
-                 <div className="flex flex-col items-center justify-center text-green-600">
-                     <Loader2 className="w-8 h-8 mb-2 animate-spin" />
-                     <span className="text-xs font-medium">Initializing...</span>
-                 </div>
-             ) : (
-                 <div className="flex flex-col items-center justify-center text-gray-300">
-                     <QrCode className="w-8 h-8 mb-2 opacity-20" />
-                     <span className="text-xs font-medium">No Active Session</span>
-                 </div>
-             )}
-          </div>
+          {/* Fourth Card: Live Bot Status */}
+          <Link href="/monitor" className="block">
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex flex-col relative overflow-hidden h-[140px] hover:border-green-200 hover:shadow-md transition-all cursor-pointer">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Activity className={`w-4 h-4 ${liveStatus.status === 'running' ? 'text-green-500 animate-pulse' : liveStatus.status === 'paused' ? 'text-yellow-500' : 'text-gray-400'}`} />
+                  <span className="text-xs font-semibold uppercase text-gray-500">Live Status</span>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  liveStatus.status === 'running' ? 'bg-green-100 text-green-700' :
+                  liveStatus.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
+                  liveStatus.status === 'error' ? 'bg-red-100 text-red-700' :
+                  'bg-gray-100 text-gray-600'
+                }`}>
+                  {liveStatus.status?.toUpperCase() || 'IDLE'}
+                </span>
+              </div>
+
+              {/* Progress or Current Lead */}
+              {liveStatus.status === 'running' && liveStatus.currentLead ? (
+                <div className="flex-1 flex flex-col justify-center">
+                  <p className="text-xs text-gray-500 truncate mb-1">
+                    Processing: <span className="font-medium text-gray-700">{liveStatus.currentLead}</span>
+                  </p>
+                  {liveStatus.totalLeads && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                        <div 
+                          className="bg-green-500 h-1.5 rounded-full transition-all"
+                          style={{ width: `${((liveStatus.processedLeads || 0) / liveStatus.totalLeads) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-500">{liveStatus.processedLeads || 0}/{liveStatus.totalLeads}</span>
+                    </div>
+                  )}
+                </div>
+              ) : qrCode ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="relative w-16 h-16">
+                    <Image src={qrCode} alt="QR" fill className="object-contain" unoptimized />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col justify-center">
+                  {liveLogs.length > 0 ? (
+                    <div className="space-y-1">
+                      {liveLogs.slice(0, 2).map((log) => (
+                        <div key={log.id} className="flex items-center gap-1.5 text-[10px]">
+                          {log.type === 'info' ? <CheckCircle className="w-3 h-3 text-green-500" /> :
+                           log.type === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                           <AlertCircle className="w-3 h-3 text-yellow-500" />}
+                          <span className="text-gray-600 truncate">{log.leadName || log.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center">No recent activity</p>
+                  )}
+                </div>
+              )}
+
+              {/* Footer hint */}
+              <p className="text-[9px] text-gray-400 text-right mt-auto">Tap for full monitor →</p>
+            </div>
+          </Link>
         </div>
 
         {/* Filters & Content Area */}

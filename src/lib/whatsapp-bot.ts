@@ -9,8 +9,18 @@ puppeteer.use(StealthPlugin());
 
 export async function runWhatsAppBot(
     leads: Business[],
-    onStatusUpdate?: (data: { status: string, qrCode?: string | null, screenshot?: string | null }) => Promise<void>,
-    onLeadContacted?: (leadId: string) => Promise<void>  // NEW: Called immediately when a lead is contacted
+    onStatusUpdate?: (data: {
+        status: string,
+        qrCode?: string | null,
+        screenshot?: string | null,
+        currentLead?: string,
+        totalLeads?: number,
+        processedLeads?: number,
+        errorCount?: number
+    }) => Promise<void>,
+    onLeadContacted?: (leadId: string) => Promise<void>,
+    onLogEvent?: (type: "info" | "error" | "warning", message: string, leadName?: string) => Promise<void>,
+    onCheckPause?: () => Promise<boolean>  // Returns true if paused
 ) {
     console.log("Starting WhatsApp Automation Bot (Strict Mode)...");
 
@@ -280,10 +290,62 @@ export async function runWhatsAppBot(
     // 5. Message Sending (ARIA-LABEL ONLY)
     const contactedLeadIds: string[] = [];
     let sentCount = 0;
+    let errorCount = 0;
+    const totalLeads = leads.filter(l => l.phone).length;
 
-    for (const lead of leads) {
+    for (let i = 0; i < leads.length; i++) {
+        const lead = leads[i];
         if (!lead.phone) continue;
-        console.log(`\n--- Processing: ${lead.name} ---`);
+
+        // Check for pause/stop state before each lead
+        const { db } = await import("@/lib/firebase");
+        const statusDoc = await db.collection("system").doc("bot_status").get();
+        const currentStatus = statusDoc.data()?.status;
+
+        // Check for STOP first - exit immediately
+        if (currentStatus === 'stopped') {
+            console.log("🛑 Bot stopped by user. Exiting...");
+            if (onLogEvent) await onLogEvent("warning", "Bot stopped by user");
+            await browser.close();
+            return { success: true, sentCount, contactedLeadIds, stopped: true };
+        }
+
+        // Check for PAUSE - wait until resumed
+        if (currentStatus === 'paused') {
+            console.log("⏸️  Bot paused. Waiting to resume...");
+            let isPaused = true;
+            while (isPaused) {
+                await new Promise(r => setTimeout(r, 2000)); // Check every 2 seconds
+
+                const checkDoc = await db.collection("system").doc("bot_status").get();
+                const checkStatus = checkDoc.data()?.status;
+
+                if (checkStatus === 'stopped') {
+                    console.log("🛑 Bot stopped by user. Exiting...");
+                    if (onLogEvent) await onLogEvent("warning", "Bot stopped by user");
+                    await browser.close();
+                    return { success: true, sentCount, contactedLeadIds, stopped: true };
+                }
+
+                if (checkStatus !== 'paused') {
+                    console.log("▶️  Bot resumed.");
+                    isPaused = false;
+                }
+            }
+        }
+
+        console.log(`\n--- Processing: ${lead.name} (${sentCount + 1}/${totalLeads}) ---`);
+
+        // Update status with current lead info
+        if (onStatusUpdate) {
+            await onStatusUpdate({
+                status: "running",
+                currentLead: lead.name,
+                totalLeads,
+                processedLeads: sentCount,
+                errorCount
+            });
+        }
 
         const TEST_PHONE = "256775910888";
         const url = createWhatsAppLink(TEST_PHONE, lead.name, lead.location || "your area");
@@ -381,15 +443,26 @@ export async function runWhatsAppBot(
                 console.log(`   📝 Lead status updated in Firestore`);
             }
 
+            // Log successful send
+            if (onLogEvent) {
+                await onLogEvent("info", `Message sent successfully`, lead.name);
+            }
+
             // Wait before next message
             await new Promise(r => setTimeout(r, 3000));
 
-        } catch (e) {
+        } catch (e: any) {
             console.error(`❌ Failed to send to ${lead.name}:`, e);
+            errorCount++;
+
+            // Log the error
+            if (onLogEvent) {
+                await onLogEvent("error", e.message || "Unknown error", lead.name);
+            }
         }
     }
 
     console.log("Closing browser...");
     await browser.close();
-    return { success: true, sentCount, contactedLeadIds };
+    return { success: true, sentCount, contactedLeadIds, errorCount };
 }
