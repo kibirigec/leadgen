@@ -26,7 +26,7 @@ export function BotControl({ leads }: BotControlProps) {
     if (loading) {
         interval = setInterval(async () => {
             const botStatus = await checkBotStatus();
-            console.log("Polling Status:", botStatus.status, botStatus.qrCode ? "QR Present" : "No QR");
+            console.log("Polling Result:", JSON.stringify(botStatus, null, 2));
             
             if (botStatus.status === 'waiting_for_scan' && botStatus.qrCode) {
                 setQrCode(botStatus.qrCode);
