@@ -128,11 +128,17 @@ export function BotControl({ leads }: BotControlProps) {
       )}
 
       {/* QR Code Modal */}
-      {loading && qrCode && (
+      {showQrModal && qrCode && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
             {/* Log render attempt */}
             <div className="hidden">{qrCode.length}</div>
-          <div className="bg-white rounded-xl p-8 max-w-sm w-full flex flex-col items-center shadow-2xl">
+          <div className="bg-white rounded-xl p-8 max-w-sm w-full flex flex-col items-center shadow-2xl relative">
+            <button 
+                onClick={() => setShowQrModal(false)}
+                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+            >
+                ✕
+            </button>
             <h3 className="text-xl font-bold text-gray-900 mb-4">Scan QR Code</h3>
             <p className="text-gray-600 mb-6 text-center">
               Open WhatsApp &gt; Linked Devices &gt; Link a Device
