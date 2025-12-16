@@ -133,12 +133,32 @@ export async function runWhatsAppBot(
         await page.goto(url);
 
         try {
-            // Wait for the message box to load (indicating we are ready to send)
-            // This is better than waiting for the send button directly, as it might not be clickable yet
-            await page.waitForSelector('div[contenteditable="true"]', { timeout: 30000 });
+            // Wait for the message box to load
+            const inputBoxSelector = 'div[contenteditable="true"][aria-label="Type a message"]';
+            await page.waitForSelector(inputBoxSelector, { timeout: 30000 });
 
             // Small delay to ensure UI is stable
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Check if message was populated
+            const messagePopulated = await page.evaluate((selector) => {
+                const el = document.querySelector(selector) as HTMLElement;
+                return el && el.innerText.length > 0;
+            }, inputBoxSelector);
+
+            if (!messagePopulated) {
+                console.log("Message not auto-populated. Typing manually...");
+                // Focus and type
+                await page.click(inputBoxSelector);
+                // Extract message from URL since we don't have it in scope easily, 
+                // OR better: we have it in the loop. Let's reconstruct it.
+                // Actually, we can just use the clipboard or type it.
+                // Let's use the `lead` object which is in scope.
+                const message = `Hi 👋\n\nI came across ${lead.name} on Google — very nice place!\n\nI noticed you don’t have a website, which might be costing you customers who try to find you online.\n\nI help local businesses get a simple site + automated chat that replies to customers after hours and brings in more inquiries.\n\nWould you be open to seeing a free demo made specifically for ${lead.name}?\n\nYou can also check us out at weblery.com`;
+
+                await page.keyboard.type(message, { delay: 10 }); // Type like a human
+                await new Promise(r => setTimeout(r, 1000));
+            }
 
             // Try to find the send button
             const sendButtonSelectors = [
