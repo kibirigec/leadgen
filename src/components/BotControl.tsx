@@ -130,11 +130,12 @@ export function BotControl({ leads }: BotControlProps) {
       {/* QR Code Modal */}
       {loading && qrCode && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-            {console.log("Rendering QR Modal with code length:", qrCode.length)}
+            {/* Log render attempt */}
+            <div className="hidden">{qrCode.length}</div>
           <div className="bg-white rounded-xl p-8 max-w-sm w-full flex flex-col items-center shadow-2xl">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Scan QR Code</h3>
             <p className="text-gray-600 mb-6 text-center">
-              Open WhatsApp > Linked Devices > Link a Device
+              Open WhatsApp &gt; Linked Devices &gt; Link a Device
             </p>
             <div className="bg-white p-4 rounded-lg border-2 border-gray-200 mb-6">
                 <Image src={qrCode} alt="WhatsApp QR Code" width={256} height={256} unoptimized />
