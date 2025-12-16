@@ -15,7 +15,7 @@ export async function runWhatsAppBot(
 
     // 1. Launch Configuration (MANDATORY)
     const launchConfig = {
-        headless: "new" as const, // Explicitly "new" as requested
+        headless: "new" as any, // Cast to any to bypass strict type check (TS expects boolean | "shell")
         userDataDir: "/app/.wweb_session", // Exact path requested
         args: [
             "--no-sandbox",
