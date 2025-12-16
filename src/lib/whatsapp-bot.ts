@@ -98,18 +98,23 @@ export async function runWhatsAppBot(
     // 3. Quick check: Are we already logged in or do we need QR?
     console.log("Checking login status...");
 
-    // Race: login indicator vs QR code
+    // Race: login indicator vs QR code - BOTH need to be proper waits
     const quickCheck = await Promise.race([
-        page.waitForSelector('#side', { timeout: 10000 }).then(() => 'logged_in'),
-        page.$('canvas').then(el => el ? 'needs_qr' : null),
-        new Promise(resolve => setTimeout(() => resolve('timeout'), 10000))
+        page.waitForSelector('#side', { timeout: 15000 })
+            .then(() => 'logged_in')
+            .catch(() => null),
+        page.waitForSelector('canvas', { timeout: 15000 })
+            .then(() => 'needs_qr')
+            .catch(() => null),
     ]);
+
+    console.log(`Login check result: ${quickCheck || 'neither detected'}`);
 
     if (quickCheck === 'logged_in') {
         console.log("✅ Already logged in! Proceeding in headless mode...");
         needsLogin = false;
-    } else if (quickCheck === 'needs_qr' || quickCheck === 'timeout') {
-        console.log("🔐 Login required (QR code detected)");
+    } else if (quickCheck === 'needs_qr' || quickCheck === null) {
+        console.log("🔐 Login required (QR code needed)");
         needsLogin = true;
 
         // If we started headless but need login, switch to headful
