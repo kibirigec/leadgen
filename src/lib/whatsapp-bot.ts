@@ -1,6 +1,9 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { Business } from './types';
 import { createWhatsAppLink } from './utils';
+
+puppeteer.use(StealthPlugin());
 
 export async function runWhatsAppBot(
     leads: Business[],
