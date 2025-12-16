@@ -27,19 +27,37 @@ export async function runWhatsAppBot(leads: Business[], onQrCode?: (qr: string) 
 
     // 1. Login Phase
     console.log("Please scan the QR code if not logged in...");
-    await page.goto("https://web.whatsapp.com");
+
+    try {
+        await page.goto("https://web.whatsapp.com", {
+            waitUntil: 'networkidle2',
+            timeout: 60000
+        });
+    } catch (navError) {
+        console.warn("Navigation timeout or error, continuing to check selectors anyway...", navError);
+    }
 
     try {
         // Wait for either the chat list (already logged in) or the QR code
         const chatListSelector = 'div[aria-label="Chat list"]';
         const qrCodeSelector = 'canvas[aria-label="Scan this QR code"]';
+        const reloadSelector = 'button[data-testid="reload-qr"]'; // "Click to reload QR code"
 
         const firstElement = await Promise.race([
-            page.waitForSelector(chatListSelector, { timeout: 60000 }).then(() => 'chat-list'),
-            page.waitForSelector(qrCodeSelector, { timeout: 60000 }).then(() => 'qr-code')
+            page.waitForSelector(chatListSelector, { timeout: 120000 }).then(() => 'chat-list'),
+            page.waitForSelector(qrCodeSelector, { timeout: 120000 }).then(() => 'qr-code'),
+            page.waitForSelector(reloadSelector, { timeout: 120000 }).then(() => 'reload-qr')
         ]);
 
-        if (firstElement === 'qr-code') {
+        if (firstElement === 'reload-qr') {
+            console.log("Reload QR code button detected. Clicking it...");
+            await page.click(reloadSelector);
+            // Wait for QR code again
+            await page.waitForSelector(qrCodeSelector, { timeout: 30000 });
+            // Fall through to QR code handling
+        }
+
+        if (firstElement === 'qr-code' || firstElement === 'reload-qr') {
             console.log("QR Code detected! Waiting for scan...");
 
             // Extract QR Code Data URL
@@ -54,14 +72,16 @@ export async function runWhatsAppBot(leads: Business[], onQrCode?: (qr: string) 
             }
 
             // Wait for login to complete after QR scan
-            await page.waitForSelector(chatListSelector, { timeout: 0 }); // Wait indefinitely for scan
+            // We use a very long timeout here because the user needs time to scan
+            await page.waitForSelector(chatListSelector, { timeout: 0 });
         }
 
         console.log("Logged in successfully!");
     } catch (e) {
+        console.error("Login Phase Error Details:", e);
         console.log("Login timed out or failed. Please try again.");
         await browser.close();
-        throw new Error("Login failed");
+        throw new Error("Login failed: " + (e instanceof Error ? e.message : String(e)));
     }
 
     // 2. Sending Loop
