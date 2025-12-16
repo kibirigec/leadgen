@@ -15,7 +15,6 @@ export function BotControl({ leads }: BotControlProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
-  const [showQrModal, setShowQrModal] = useState(false);
 
   // Client-side filter to show accurate count
   const newLeads = leads.filter(l => l.phone && l.status !== 'contacted');
@@ -128,39 +127,21 @@ export function BotControl({ leads }: BotControlProps) {
         </div>
       )}
 
-      {/* QR Code Modal */}
-      {showQrModal && qrCode && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-            {/* Log render attempt */}
-            <div className="hidden">{qrCode.length}</div>
-          <div className="bg-white rounded-xl p-8 max-w-sm w-full flex flex-col items-center shadow-2xl relative">
-            <button 
-                onClick={() => setShowQrModal(false)}
-                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-            >
-                ✕
-            </button>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Scan QR Code</h3>
-            <p className="text-gray-600 mb-6 text-center">
+      {/* Persistent QR Code Section */}
+      {qrCode && (
+        <div className="absolute top-full left-0 mt-4 p-4 bg-white rounded-xl shadow-xl border border-gray-200 w-64 z-50 animate-in fade-in slide-in-from-top-2">
+            <h3 className="text-sm font-bold text-gray-900 mb-2">Scan to Login</h3>
+            <div className="bg-white p-2 rounded-lg border border-gray-200 mb-2">
+                <Image src={qrCode} alt="WhatsApp QR Code" width={200} height={200} unoptimized className="w-full h-auto" />
+            </div>
+            <p className="text-xs text-gray-500 text-center">
               Open WhatsApp &gt; Linked Devices &gt; Link a Device
             </p>
-            <div className="bg-white p-4 rounded-lg border-2 border-gray-200 mb-6">
-                <Image src={qrCode} alt="WhatsApp QR Code" width={256} height={256} unoptimized />
-            </div>
-            <div className="flex items-center gap-2 text-gray-500 font-medium">
-                <Loader2 className="w-5 h-5 animate-spin text-green-600" />
-                Waiting for scan...
-            </div>
-          </div>
         </div>
       )}
 
       {/* Debug Screenshot Modal (on Error) */}
       {!loading && status?.includes("failed") && (
-         // We can't easily access the screenshot here because 'status' is just a string in the state.
-         // But the user can check the logs or we could fetch the status doc again.
-         // For now, let's just rely on the user seeing the error message.
-         // Actually, let's add a small "View Debug Info" button if we want to be fancy, but let's keep it simple for now.
          null
       )}
     </div>
