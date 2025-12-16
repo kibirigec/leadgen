@@ -9,14 +9,16 @@ puppeteer.use(StealthPlugin());
 
 export async function runWhatsAppBot(
     leads: Business[],
-    onStatusUpdate?: (data: { status: string, qrCode?: string | null, screenshot?: string | null }) => Promise<void>
+    onStatusUpdate?: (data: { status: string, qrCode?: string | null, screenshot?: string | null }) => Promise<void>,
+    onLeadContacted?: (leadId: string) => Promise<void>  // NEW: Called immediately when a lead is contacted
 ) {
     console.log("Starting WhatsApp Automation Bot (Strict Mode)...");
 
     // 1. Launch Configuration
-    // Use HEADFUL mode locally so user can scan QR directly from Chrome window
-    // Use HEADLESS mode in production (Docker) where QR is sent to frontend
     const isLocalDev = !fs.existsSync("/app");
+    const sessionDir = isLocalDev
+        ? path.resolve(process.cwd(), ".wweb_session")
+        : "/app/.wweb_session";
 
     // Different args for local vs Docker - some args crash Chrome on macOS
     const dockerArgs = [
@@ -42,26 +44,34 @@ export async function runWhatsAppBot(
         "--disable-popup-blocking",
     ];
 
-    const launchConfig: any = {
-        headless: isLocalDev ? false : "new",
-        userDataDir: isLocalDev
-            ? path.resolve(process.cwd(), ".wweb_session")
-            : "/app/.wweb_session",
-        args: isLocalDev ? localArgs : dockerArgs,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
-    };
-
-    // On Mac, set Chrome path if not in env
-    if (isLocalDev) {
-        console.log("🖥️  LOCAL MODE: Chrome window will open - scan QR code there!");
-        if (!launchConfig.executablePath && process.platform === 'darwin') {
-            launchConfig.executablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-        }
-    } else {
-        console.log("🐳 DOCKER MODE: Running headless, QR sent to frontend.");
+    // Get Chrome executable path
+    let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    if (isLocalDev && !executablePath && process.platform === 'darwin') {
+        executablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
     }
 
-    let browser;
+    // Check if session directory exists (hint that login might be cached)
+    const sessionExists = fs.existsSync(path.join(sessionDir, 'Default'));
+
+    // SMART MODE: Try headless first if session exists, otherwise start headful
+    let startHeadless = isLocalDev ? sessionExists : true;
+
+    console.log(sessionExists
+        ? "📦 Session found! Trying headless mode first..."
+        : "🆕 No session found. Starting in headful mode for login...");
+
+    let browser: Awaited<ReturnType<typeof puppeteer.launch>>;
+    let page: Awaited<ReturnType<typeof browser.newPage>>;
+    let needsLogin = false;
+
+    // First attempt - try to use saved session
+    const launchConfig: any = {
+        headless: startHeadless ? "new" : false,
+        userDataDir: sessionDir,
+        args: isLocalDev ? localArgs : dockerArgs,
+        executablePath
+    };
+
     try {
         browser = await puppeteer.launch(launchConfig);
     } catch (e) {
@@ -69,9 +79,9 @@ export async function runWhatsAppBot(
         throw e;
     }
 
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
-    // 2. Navigation (MANDATORY)
+    // 2. Navigation
     try {
         if (onStatusUpdate) await onStatusUpdate({ status: "starting" });
         console.log("Navigating to WhatsApp Web...");
@@ -85,117 +95,182 @@ export async function runWhatsAppBot(
         throw new Error("Page load timeout (120s)");
     }
 
-    // 3. Login Detection & QR Handling (CRITICAL - FIXED RACE CONDITION)
-    try {
-        console.log("Waiting for login indicators or QR code...");
+    // 3. Quick check: Are we already logged in or do we need QR?
+    console.log("Checking login status...");
 
-        // We also check for session directory existence as a hint
-        const sessionExists = fs.existsSync(path.join(launchConfig.userDataDir, 'Default'));
-        if (sessionExists) {
-            console.log("Session directory found. Expecting restoration...");
-        }
+    // Race: login indicator vs QR code
+    const quickCheck = await Promise.race([
+        page.waitForSelector('#side', { timeout: 10000 }).then(() => 'logged_in'),
+        page.$('canvas').then(el => el ? 'needs_qr' : null),
+        new Promise(resolve => setTimeout(() => resolve('timeout'), 10000))
+    ]);
 
-        // Flag to control the QR polling loop
-        let isLoggedIn = false;
-        let lastQrDataUrl: string | null = null;
+    if (quickCheck === 'logged_in') {
+        console.log("✅ Already logged in! Proceeding in headless mode...");
+        needsLogin = false;
+    } else if (quickCheck === 'needs_qr' || quickCheck === 'timeout') {
+        console.log("🔐 Login required (QR code detected)");
+        needsLogin = true;
 
-        // Continuous QR polling function - runs until login is detected
-        const pollForQR = async (): Promise<void> => {
-            console.log("Starting QR code polling loop...");
-            while (!isLoggedIn) {
-                try {
-                    // Check if canvas exists (quick check, don't wait long)
-                    const canvas = await page.$('canvas');
-                    if (canvas) {
-                        const qrDataUrl = await page.evaluate(() => {
-                            const c = document.querySelector('canvas');
-                            return c ? c.toDataURL() : null;
-                        });
+        // If we started headless but need login, switch to headful
+        if (startHeadless && isLocalDev) {
+            console.log("🔄 Switching to headful mode for QR scanning...");
+            await browser.close();
 
-                        // Only update if QR changed (avoid spamming Firestore)
-                        if (qrDataUrl && qrDataUrl !== lastQrDataUrl) {
-                            console.log("QR Code detected! Updating Firestore...");
-                            lastQrDataUrl = qrDataUrl;
-                            if (onStatusUpdate) {
-                                await onStatusUpdate({ status: "waiting_for_scan", qrCode: qrDataUrl });
-                            }
-                        }
-                    }
-                } catch (e) {
-                    // Ignore errors in QR check - page might be navigating
-                }
+            browser = await puppeteer.launch({
+                headless: false,
+                userDataDir: sessionDir,
+                args: localArgs,
+                executablePath
+            });
+            page = await browser.newPage();
 
-                // Wait 2 seconds before next check (if not logged in yet)
-                if (!isLoggedIn) {
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-            }
-            console.log("QR polling loop ended (login detected).");
-        };
-
-        // Login detection promise - using multiple selector strategies
-        const waitForLogin = async (): Promise<string> => {
-            console.log("Waiting for any login indicator...");
-
-            // Multiple possible selectors for logged-in state
-            const loginSelectors = [
-                '[data-testid="chat-list"]',
-                '[data-testid="conversation-panel-wrapper"]',
-                'div[aria-label="Type a message"]',
-                '[contenteditable="true"][data-tab="10"]',
-                'div[data-testid="cell-frame-container"]',
-                '#side', // Main sidebar panel
-                'div[data-testid="chatlist-header"]',
-            ];
-
-            // Try each selector
-            const selectorPromises = loginSelectors.map((selector, index) =>
-                page.waitForSelector(selector, { timeout: 120000 })
-                    .then(() => {
-                        console.log(`✅ Login detected via selector ${index + 1}: ${selector}`);
-                        return 'success';
-                    })
-                    .catch(() => null)
-            );
-
-            const result = await Promise.race(selectorPromises);
-            if (result === 'success') {
-                return 'success';
-            }
-
-            // If all fail, throw
-            throw new Error("No login indicators found");
-        };
-
-        // Run QR polling and login detection in parallel
-        // pollForQR runs continuously, waitForLogin resolves when logged in
-        const qrPollingPromise = pollForQR();
-        const loginResult = await waitForLogin();
-
-        // Signal the polling loop to stop
-        isLoggedIn = true;
-
-        console.log("Login indicators detected. Login successful.");
-        if (onStatusUpdate) await onStatusUpdate({ status: "logged_in", qrCode: null });
-
-    } catch (e) {
-        console.error("Login failed or timed out.");
-
-        // 4. Debug Mode (FAILURE ONLY)
-        console.log("Entering Debug Mode...");
-        await page.screenshot({ path: "login-failure.png", fullPage: true });
-
-        if (onStatusUpdate) {
-            const screenshot = await page.screenshot({ encoding: 'base64' });
-            await onStatusUpdate({
-                status: "error",
-                screenshot: `data:image/png;base64,${screenshot}`
+            console.log("Navigating to WhatsApp Web (headful)...");
+            await page.goto("https://web.whatsapp.com", {
+                waitUntil: "networkidle2",
+                timeout: 120000,
             });
         }
-
-        await browser.close();
-        throw new Error("Login failed after 120s/180s checks.");
     }
+
+    // 4. Login Detection & QR Handling (only if needed)
+    if (needsLogin) {
+        try {
+            console.log("Waiting for login...");
+
+            // Flag to control the QR polling loop
+            let isLoggedIn = false;
+            let lastQrDataUrl: string | null = null;
+
+            // Continuous QR polling function - runs until login is detected
+            const pollForQR = async (): Promise<void> => {
+                console.log("Starting QR code polling loop...");
+                while (!isLoggedIn) {
+                    try {
+                        // Check if canvas exists (quick check, don't wait long)
+                        const canvas = await page.$('canvas');
+                        if (canvas) {
+                            const qrDataUrl = await page.evaluate(() => {
+                                const c = document.querySelector('canvas');
+                                return c ? c.toDataURL() : null;
+                            });
+
+                            // Only update if QR changed (avoid spamming Firestore)
+                            if (qrDataUrl && qrDataUrl !== lastQrDataUrl) {
+                                console.log("QR Code detected! Updating Firestore...");
+                                lastQrDataUrl = qrDataUrl;
+                                if (onStatusUpdate) {
+                                    await onStatusUpdate({ status: "waiting_for_scan", qrCode: qrDataUrl });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Ignore errors in QR check - page might be navigating
+                    }
+
+                    // Wait 2 seconds before next check (if not logged in yet)
+                    if (!isLoggedIn) {
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+                }
+                console.log("QR polling loop ended (login detected).");
+            };
+
+            // Login detection promise - using multiple selector strategies
+            const waitForLogin = async (): Promise<string> => {
+                console.log("Waiting for any login indicator...");
+
+                // Multiple possible selectors for logged-in state
+                const loginSelectors = [
+                    '[data-testid="chat-list"]',
+                    '[data-testid="conversation-panel-wrapper"]',
+                    'div[aria-label="Type a message"]',
+                    '[contenteditable="true"][data-tab="10"]',
+                    'div[data-testid="cell-frame-container"]',
+                    '#side', // Main sidebar panel
+                    'div[data-testid="chatlist-header"]',
+                ];
+
+                // Try each selector
+                const selectorPromises = loginSelectors.map((selector, index) =>
+                    page.waitForSelector(selector, { timeout: 120000 })
+                        .then(() => {
+                            console.log(`✅ Login detected via selector ${index + 1}: ${selector}`);
+                            return 'success';
+                        })
+                        .catch(() => null)
+                );
+
+                const result = await Promise.race(selectorPromises);
+                if (result === 'success') {
+                    return 'success';
+                }
+
+                // If all fail, throw
+                throw new Error("No login indicators found");
+            };
+
+            // Run QR polling and login detection in parallel
+            // pollForQR runs continuously, waitForLogin resolves when logged in
+            const qrPollingPromise = pollForQR();
+            const loginResult = await waitForLogin();
+
+            // Signal the polling loop to stop
+            isLoggedIn = true;
+
+            console.log("Login indicators detected. Login successful.");
+            if (onStatusUpdate) await onStatusUpdate({ status: "logged_in", qrCode: null });
+
+        } catch (e) {
+            console.error("Login failed or timed out.");
+
+            // 4. Debug Mode (FAILURE ONLY)
+            console.log("Entering Debug Mode...");
+            await page.screenshot({ path: "login-failure.png", fullPage: true });
+
+            if (onStatusUpdate) {
+                const screenshot = await page.screenshot({ encoding: 'base64' });
+                await onStatusUpdate({
+                    status: "error",
+                    screenshot: `data:image/png;base64,${screenshot}`
+                });
+            }
+
+            await browser.close();
+            throw new Error("Login failed after 120s/180s checks.");
+        }
+
+        // ============================================================
+        // PHASE 2: Close headful browser, relaunch in HEADLESS mode
+        // ============================================================
+        if (isLocalDev) {
+            console.log("\n🔄 PHASE 2: Switching to headless mode for message automation...");
+            await browser.close();
+
+            // Relaunch in headless mode with same session
+            const headlessConfig: any = {
+                headless: "new",
+                userDataDir: path.resolve(process.cwd(), ".wweb_session"),
+                args: localArgs,
+                executablePath: launchConfig.executablePath
+            };
+
+            browser = await puppeteer.launch(headlessConfig);
+            page = await browser.newPage();
+
+            // Navigate back to WhatsApp Web
+            console.log("Navigating to WhatsApp Web in headless mode...");
+            await page.goto("https://web.whatsapp.com", {
+                waitUntil: "networkidle2",
+                timeout: 60000,
+            });
+
+            // Wait for session to restore
+            console.log("Waiting for session to restore...");
+            await page.waitForSelector('#side', { timeout: 30000 });
+            console.log("✅ Session restored in headless mode!");
+        }
+    } // End of if(needsLogin) block
 
     // 5. Message Sending (ARIA-LABEL ONLY)
     const contactedLeadIds: string[] = [];
@@ -294,6 +369,12 @@ export async function runWhatsAppBot(
             console.log("✅ Message sent!");
             sentCount++;
             contactedLeadIds.push(lead.id);
+
+            // IMMEDIATELY update Firestore - don't wait until end of run
+            if (onLeadContacted) {
+                await onLeadContacted(lead.id);
+                console.log(`   📝 Lead status updated in Firestore`);
+            }
 
             // Wait before next message
             await new Promise(r => setTimeout(r, 3000));

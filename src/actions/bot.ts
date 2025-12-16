@@ -5,8 +5,16 @@ import { Business } from "@/lib/types";
 
 export async function startBotAction(leads: Business[]) {
     try {
+        // Debug: log incoming lead statuses
+        console.log(`\n📋 Received ${leads.length} total leads`);
+        const alreadyContacted = leads.filter(l => l.status === 'contacted');
+        console.log(`   - Already contacted: ${alreadyContacted.length}`);
+        alreadyContacted.forEach(l => console.log(`     ↳ ${l.name}`));
+
         // Filter for leads that have a phone number and haven't been contacted yet
         const validLeads = leads.filter(l => l.phone && l.status !== 'contacted');
+        console.log(`   - New leads to contact: ${validLeads.length}`);
+        validLeads.forEach(l => console.log(`     ↳ ${l.name} (status: ${l.status || 'undefined'})`));
 
         if (validLeads.length === 0) {
             return { success: false, error: "No new leads with phone numbers found." };
@@ -38,6 +46,16 @@ export async function startBotAction(leads: Business[]) {
                 console.log("Firestore updated successfully.");
             } catch (dbError) {
                 console.error("Firestore update failed:", dbError);
+            }
+        }, async (leadId) => {
+            // IMMEDIATELY mark lead as contacted when message is sent
+            try {
+                await db.collection("leads").doc(leadId).set({
+                    status: "contacted",
+                    lastContactedAt: new Date().toISOString()
+                }, { merge: true });
+            } catch (dbError) {
+                console.error(`Failed to update lead ${leadId}:`, dbError);
             }
         });
 

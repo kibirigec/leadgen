@@ -22,7 +22,7 @@ export async function saveLeadAction(lead: Business) {
         await db.collection("leads").doc(lead.id).set({
             ...lead,
             savedAt: new Date().toISOString(),
-        });
+        }, { merge: true }); // Preserve existing status field
         return { success: true };
     } catch (error) {
         console.error("Error saving lead:", error);
@@ -40,7 +40,7 @@ export async function saveMultipleLeadsAction(leads: Business[]) {
             batch.set(docRef, {
                 ...lead,
                 savedAt: timestamp,
-            });
+            }, { merge: true }); // IMPORTANT: merge to preserve 'status' and 'lastContactedAt' fields
         });
 
         await batch.commit();
