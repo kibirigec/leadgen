@@ -4,6 +4,7 @@ import { Business } from './types';
 import { createWhatsAppLink } from './utils';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 puppeteer.use(StealthPlugin());
 
@@ -25,13 +26,22 @@ export async function runWhatsAppBot(
     console.log("Starting WhatsApp Automation Bot (Strict Mode)...");
 
     // 1. Launch Configuration
-    const isLocalDev = !fs.existsSync("/app");
-    const sessionDir = isLocalDev
-        ? path.resolve(process.cwd(), ".wweb_session")
-        : "/app/.wweb_session";
+    // Detect if we're on a server/VM: check for /app (Docker), running as root, or Linux server
+    const inDocker = fs.existsSync("/app");
+    const isRoot = process.getuid && process.getuid() === 0;
+    const isLinuxServer = os.platform() === 'linux' && !process.env.DISPLAY;
+    const isServerEnvironment = inDocker || isRoot || isLinuxServer;
 
-    // Different args for local vs Docker - some args crash Chrome on macOS
-    const dockerArgs = [
+    const isLocalDev = !isServerEnvironment;
+
+    console.log(`Environment: ${isLocalDev ? 'Local Dev' : 'Server'} (Docker: ${inDocker}, Root: ${isRoot}, Linux: ${isLinuxServer})`);
+
+    const sessionDir = inDocker
+        ? "/app/.wweb_session"
+        : path.resolve(process.cwd(), ".wweb_session");
+
+    // Server args - essential for running headless on Linux/Docker/VMs
+    const serverArgs = [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-gpu",
@@ -78,7 +88,7 @@ export async function runWhatsAppBot(
     const launchConfig: any = {
         headless: startHeadless ? "new" : false,
         userDataDir: sessionDir,
-        args: isLocalDev ? localArgs : dockerArgs,
+        args: isLocalDev ? localArgs : serverArgs,
         executablePath
     };
 
