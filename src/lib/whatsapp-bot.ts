@@ -105,6 +105,13 @@ export async function runWhatsAppBot(
 
     page = await browser.newPage();
 
+    // Set viewport for better QR code quality
+    await page.setViewport({
+        width: 1280,
+        height: 900,
+        deviceScaleFactor: 2  // High DPI for clearer QR
+    });
+
     // 2. Navigation
     try {
         if (onStatusUpdate) await onStatusUpdate({ status: "starting" });
