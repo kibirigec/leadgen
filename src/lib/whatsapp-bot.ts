@@ -36,9 +36,13 @@ export async function runWhatsAppBot(
 
     console.log(`Environment: ${isLocalDev ? 'Local Dev' : 'Server'} (Docker: ${inDocker}, Root: ${isRoot}, Linux: ${isLinuxServer})`);
 
+    // Session directory - use env var, or fall back to home directory path
+    // This ensures consistent location regardless of cwd
     const sessionDir = inDocker
         ? "/app/.wweb_session"
-        : path.resolve(process.cwd(), ".wweb_session");
+        : process.env.WWEB_SESSION_PATH || path.join(os.homedir(), ".wweb_session");
+
+    console.log(`Session directory: ${sessionDir}`);
 
     // Server args - essential for running headless on Linux/Docker/VMs
     const serverArgs = [
