@@ -1,15 +1,19 @@
 /**
- * Scrape Runner
+ * Scrape Runner with Reserve Pool
  * 
- * Runs the daily scrape logic
+ * Respects daily limits: 30 morning + 30 lunch + 40 evening = 100/day
+ * Pulls from reserve pool first, then scrapes if needed
+ * Excess goes to reserve pool for future use
  */
 
 import { getDb, updateWorkerStatus } from './firebase';
 import { ApifyClient } from 'apify-client';
+import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
+import { isPhoneUsed } from './deduplication';
 
 type LogFn = (level: string, message: string) => void;
 
-// Configuration matching main app
+// Configuration
 const TIME_WINDOWS = {
     morning: {
         totalMessages: 30,
@@ -54,6 +58,17 @@ const WEEKLY_ROTATION: Record<number, string[]> = {
     6: ['Fort Portal', 'Kasese'],
 };
 
+interface ScrapedLead {
+    name: string;
+    phone: string;
+    address?: string;
+    website?: string;
+    businessType: string;
+    city: string;
+    timeWindow: TimeWindow;
+    priority: number;
+}
+
 export async function runScrape(log: LogFn, limit?: number): Promise<{ success: boolean; totalScraped: number }> {
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
@@ -63,70 +78,135 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
     log('info', `Starting scrape for ${today}`);
     log('info', `Cities: ${cities.join(', ')}`);
 
-    let totalScraped = 0;
+    let totalQueued = 0;
+    let totalReserve = 0;
     const apifyClient = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
     // Process each time window
     for (const [windowName, config] of Object.entries(TIME_WINDOWS)) {
-        log('info', `Processing ${windowName} window (${config.totalMessages} leads needed)`);
+        const window = windowName as TimeWindow;
+        const windowLimit = limit ? Math.min(limit, config.totalMessages) : config.totalMessages;
 
-        for (const businessType of config.businessTypes) {
-            const keyword = businessType.keywords[0];
+        log('info', `\n📋 ${window.toUpperCase()} WINDOW (need ${windowLimit} leads)`);
 
-            for (const city of cities) {
-                try {
-                    log('info', `  Scraping: ${keyword} in ${city}`);
+        // Step 1: Pull from reserve pool first
+        log('info', `  1️⃣ Checking reserve pool...`);
+        const reserveLeads = await pullFromReservePool(window, windowLimit);
+        log('info', `     Found ${reserveLeads.length} in reserve`);
 
-                    const run = await apifyClient.actor('compass/crawler-google-places').call({
-                        searchStringsArray: [`${keyword} in ${city}, Uganda`],
-                        maxCrawledPlacesPerSearch: Math.ceil(businessType.dailyQuota * 2),
-                        language: 'en',
-                        maxImages: 0,
-                    });
+        const leadsForQueue: ScrapedLead[] = reserveLeads.map(r => ({
+            name: r.name,
+            phone: r.phone,
+            address: r.address,
+            businessType: r.businessType,
+            city: r.city,
+            timeWindow: window,
+            priority: r.priority,
+        }));
 
-                    const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+        const stillNeeded = windowLimit - leadsForQueue.length;
 
-                    // Save to leads_queue
-                    for (const item of items) {
-                        if (item.phone) {
-                            await db.collection('leads_queue').add({
-                                name: item.title,
-                                phone: item.phone,
-                                website: item.website || null,
-                                address: item.address,
-                                city,
+        // Step 2: Scrape if we need more
+        if (stillNeeded > 0) {
+            log('info', `  2️⃣ Scraping ${stillNeeded} more leads...`);
+
+            const freshLeads: ScrapedLead[] = [];
+            const excessLeads: ScrapedLead[] = [];
+
+            for (const businessType of config.businessTypes) {
+                const keyword = businessType.keywords[0];
+
+                for (const city of cities) {
+                    try {
+                        log('info', `     Scraping: ${keyword} in ${city}`);
+
+                        const run = await apifyClient.actor('compass/crawler-google-places').call({
+                            searchStringsArray: [`${keyword} in ${city}, Uganda`],
+                            maxCrawledPlacesPerSearch: businessType.dailyQuota * 3, // 3x buffer
+                            language: 'en',
+                            maxImages: 0,
+                        });
+
+                        const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+
+                        for (const item of items) {
+                            if (!item.phone) continue;
+
+                            // Check deduplication
+                            const isUsed = await isPhoneUsed(item.phone as string);
+                            if (isUsed) continue;
+
+                            const lead: ScrapedLead = {
+                                name: item.title as string,
+                                phone: item.phone as string,
+                                address: item.address as string,
+                                website: item.website as string,
                                 businessType: businessType.type,
-                                timeWindow: windowName,
-                                priority: item.website ? 50 : 75, // No website = higher priority
-                                status: 'pending',
-                                dispatchDate: today,
-                                createdAt: new Date().toISOString(),
-                            });
-                            totalScraped++;
+                                city,
+                                timeWindow: window,
+                                priority: calculatePriority({ hasWebsite: !!item.website, rating: item.totalScore as number }),
+                            };
 
-                            // Check limit for test mode - return immediately
-                            if (limit && totalScraped >= limit) {
-                                log('info', `  Reached limit of ${limit} leads - stopping`);
-
-                                // Update worker status
-                                await updateWorkerStatus({
-                                    lastScrape: {
-                                        date: new Date().toISOString(),
-                                        success: true,
-                                        leadsScraped: totalScraped,
-                                    },
-                                });
-
-                                return { success: true, totalScraped };
+                            if (freshLeads.length < stillNeeded) {
+                                freshLeads.push(lead);
+                            } else {
+                                excessLeads.push(lead);
                             }
                         }
-                    }
 
-                    log('info', `    Found ${items.length} results, ${items.filter((i: any) => i.phone).length} with phone`);
-                } catch (error: any) {
-                    log('error', `  Error scraping ${keyword} in ${city}: ${error.message}`);
+                        log('info', `       Found ${items.length} results, ${freshLeads.length} usable`);
+
+                        // Stop if we have enough
+                        if (freshLeads.length >= stillNeeded) break;
+
+                    } catch (error: any) {
+                        log('error', `     Error scraping ${keyword} in ${city}: ${error.message}`);
+                    }
                 }
+
+                if (freshLeads.length >= stillNeeded) break;
             }
+
+            // Add fresh leads to queue
+            leadsForQueue.push(...freshLeads);
+
+            // Store excess in reserve pool
+            if (excessLeads.length > 0) {
+                log('info', `  3️⃣ Storing ${excessLeads.length} excess leads in reserve pool`);
+                await addToReservePool(excessLeads.map(l => ({
+                    ...l,
+                    scrapedAt: new Date().toISOString(),
+                    hasWebsite: !!l.website,
+                })));
+                totalReserve += excessLeads.length;
+            }
+        }
+
+        // Step 3: Save to leads_queue
+        log('info', `  4️⃣ Saving ${leadsForQueue.length} leads to queue`);
+
+        for (const lead of leadsForQueue) {
+            await db.collection('leads_queue').add({
+                name: lead.name,
+                phone: lead.phone,
+                address: lead.address,
+                businessType: lead.businessType,
+                city: lead.city,
+                timeWindow: window,
+                priority: lead.priority,
+                status: 'pending',
+                dispatchDate: today,
+                createdAt: new Date().toISOString(),
+            });
+            totalQueued++;
+        }
+
+        log('info', `  ✅ ${window}: ${leadsForQueue.length} queued`);
+
+        // Check test limit
+        if (limit && totalQueued >= limit) {
+            log('info', `\n🧪 Test limit reached (${limit})`);
+            break;
         }
     }
 
@@ -135,10 +215,13 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
         lastScrape: {
             date: new Date().toISOString(),
             success: true,
-            leadsScraped: totalScraped,
+            leadsScraped: totalQueued,
         },
     });
 
-    log('info', `Scrape complete! Total leads: ${totalScraped}`);
-    return { success: true, totalScraped };
+    log('info', `\n🎉 Scrape complete!`);
+    log('info', `   Queued: ${totalQueued} leads`);
+    log('info', `   Reserve: ${totalReserve} leads stored`);
+
+    return { success: true, totalScraped: totalQueued };
 }

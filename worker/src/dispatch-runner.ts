@@ -6,6 +6,7 @@
 
 import { getDb, updateWorkerStatus } from './firebase';
 import { runWhatsAppBot } from './bot';
+import { markPhoneUsed } from './deduplication';
 
 type LogFn = (level: string, message: string) => void;
 type TimeWindow = 'morning' | 'lunch' | 'evening';
@@ -53,13 +54,20 @@ export async function runDispatch(
 
         log('info', `Bot finished. Contacted IDs: ${result.contactedLeadIds.join(', ')}`);
 
-        // Mark leads as sent
+        // Mark leads as sent and record in deduplication history
         for (const leadId of result.contactedLeadIds) {
+            const lead = leads.find(l => l.id === leadId);
             log('info', `  Marking lead ${leadId} as sent`);
+
             await db.collection('leads_queue').doc(leadId).update({
                 status: 'sent',
                 sentAt: new Date().toISOString(),
             });
+
+            // Record in outreach_history for deduplication
+            if (lead?.phone) {
+                await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted');
+            }
         }
 
         // Update worker status

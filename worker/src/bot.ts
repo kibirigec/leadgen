@@ -9,6 +9,7 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import os from 'os';
 import path from 'path';
 import { getDb, getBotStatus } from './firebase';
+import { getMessage } from './message-variants';
 
 puppeteer.use(StealthPlugin());
 
@@ -20,6 +21,7 @@ interface Lead {
     phone: string;
     website?: string;
     businessType?: string;
+    city?: string;
 }
 
 // TEST MODE: All messages go to this number
@@ -149,7 +151,7 @@ export async function runWhatsAppBot(
                     errorCount,
                 });
 
-                const message = getMessage(lead.name, lead.businessType || 'business');
+                const message = getMessage(lead.name, lead.businessType || 'business', lead.city || 'your area');
 
                 // TEST MODE: Use test phone instead of actual lead phone
                 const url = `https://web.whatsapp.com/send?phone=${TEST_PHONE}&text=${encodeURIComponent(message)}`;
@@ -222,24 +224,4 @@ export async function runWhatsAppBot(
     await addBotLog('info', `Bot finished. Sent: ${sentCount}, Errors: ${errorCount}`);
 
     return { success: true, sentCount, contactedLeadIds };
-}
-
-function getMessage(businessName: string, businessType: string): string {
-    const templates: Record<string, string[]> = {
-        clinic: [
-            `Hi ${businessName}! Is this the right number for appointment inquiries?`,
-            `Hello ${businessName}, I'm looking for a clinic in your area. Are you accepting new patients?`,
-        ],
-        restaurant: [
-            `Hi ${businessName}! Do you take reservations on WhatsApp?`,
-            `Hello! Is this ${businessName}? Looking to book a table soon.`,
-        ],
-        default: [
-            `Hi ${businessName}! Is this the right contact for business inquiries?`,
-            `Hello! I'm trying to reach ${businessName}. Is this the correct number?`,
-        ],
-    };
-
-    const typeTemplates = templates[businessType] || templates.default;
-    return typeTemplates[Math.floor(Math.random() * typeTemplates.length)];
 }
