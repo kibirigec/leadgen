@@ -19,6 +19,12 @@ const VAPID_KEY = 'BPolvq-3VrZZAOyB5O26DFxwYorrclJzpS1KS5BY3FJAkCx7J9zrdWIMH8HjS
 export async function initMessaging(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
 
+    // Check if browser supports required APIs
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        console.warn('Browser does not support push notifications');
+        return false;
+    }
+
     try {
         messaging = getMessaging(app);
         return true;
