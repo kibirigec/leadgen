@@ -69,15 +69,53 @@ export async function runWhatsAppBot(
 
                 const phone = normalizePhone(lead.phone);
                 const message = getMessage(lead.name, lead.businessType || 'business');
-                const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 
-                await page.goto(url);
-                await page.waitForSelector('[data-testid="conversation-compose-box-input"]', { timeout: 30000 });
+                // Use WhatsApp Web direct link format
+                const url = `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+
+                await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+                // Wait for the chat to load - try multiple selectors
+                const inputSelectors = [
+                    '[data-testid="conversation-compose-box-input"]',
+                    'div[contenteditable="true"][data-tab="10"]',
+                    'footer div[contenteditable="true"]',
+                    '#main footer div[contenteditable="true"]',
+                ];
+
+                let found = false;
+                for (const selector of inputSelectors) {
+                    try {
+                        await page.waitForSelector(selector, { timeout: 15000 });
+                        found = true;
+                        log('info', `  Found input with: ${selector}`);
+                        break;
+                    } catch {
+                        // Try next selector
+                    }
+                }
+
+                if (!found) {
+                    // Check if there's an "invalid number" message
+                    const invalidCheck = await page.$('div[data-testid="popup-contents"]');
+                    if (invalidCheck) {
+                        log('warning', `  Phone ${phone} may be invalid - skipping`);
+                        continue;
+                    }
+                    log('warning', `  Could not find input box - skipping ${lead.name}`);
+                    continue;
+                }
+
+                // Small delay then press Enter to send
+                await new Promise(r => setTimeout(r, 1000));
                 await page.keyboard.press('Enter');
+
+                // Wait to confirm send
+                await new Promise(r => setTimeout(r, 2000));
 
                 sentCount++;
                 contactedLeadIds.push(lead.id);
-                log('info', `✅ Sent to ${lead.name}`);
+                log('info', `✅ Sent to ${lead.name} (${phone})`);
 
                 // Human-like delay (30-60 seconds)
                 const delay = 30000 + Math.floor(Math.random() * 30000);
