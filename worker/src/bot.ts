@@ -102,7 +102,12 @@ export async function runWhatsAppBot(
                         log('warning', `  Phone ${phone} may be invalid - skipping`);
                         continue;
                     }
-                    log('warning', `  Could not find input box - skipping ${lead.name}`);
+
+                    // Take screenshot for debugging
+                    const screenshotPath = `/tmp/debug_${phone}.png`;
+                    await page.screenshot({ path: screenshotPath, fullPage: true });
+                    log('warning', `  Could not find input box - screenshot saved to ${screenshotPath}`);
+                    log('warning', `  URL was: ${page.url()}`);
                     continue;
                 }
 
