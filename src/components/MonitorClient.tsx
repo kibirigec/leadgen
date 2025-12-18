@@ -49,29 +49,40 @@ export function MonitorClient() {
     ]);
   };
 
+  // Get current dispatch window based on time
+  const getCurrentWindow = (): 'morning' | 'lunch' | 'evening' => {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 18) return 'lunch';
+    return 'evening';
+  };
+
   // Fetch lead stats from leads_queue collection
   const fetchLeadStats = async () => {
     try {
       const queueRef = collection(clientDb, 'leads_queue');
+      const currentWindow = getCurrentWindow();
       
-      // Get ALL leads (no date filter)
+      // Get ALL leads
       const allSnap = await getDocs(queueRef);
       
       // Count by status
-      let pending = 0;
+      let pendingInWindow = 0;
       let sent = 0;
       allSnap.forEach(doc => {
         const data = doc.data();
         if (data.status === 'sent') sent++;
-        else if (data.status === 'pending') pending++;
+        else if (data.status === 'pending' && data.timeWindow === currentWindow) {
+          pendingInWindow++;
+        }
       });
       
-      console.log(`Stats: total=${allSnap.size}, sent=${sent}, pending=${pending}`);
+      console.log(`Stats: total=${allSnap.size}, sent=${sent}, pending(${currentWindow})=${pendingInWindow}`);
       
       setLeadStats({
         total: allSnap.size,
         contacted: sent,
-        pending
+        pending: pendingInWindow
       });
     } catch (err) {
       console.error("Error fetching lead stats:", err);
