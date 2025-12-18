@@ -52,7 +52,7 @@ export function MonitorClient() {
   // Fetch lead stats
   const fetchLeadStats = async () => {
     try {
-      const leads = await withTimeout(getSavedLeadsAction(), 10000);
+      const leads = await withTimeout(getSavedLeadsAction(), 30000);
       const contacted = leads.filter(l => l.status === 'contacted').length;
       const pending = leads.filter(l => l.phone && l.status !== 'contacted').length;
       setLeadStats({
@@ -126,7 +126,7 @@ export function MonitorClient() {
     setLoading("start");
     setError(null);
     try {
-      const leads = await withTimeout(getSavedLeadsAction(), 10000);
+      const leads = await withTimeout(getSavedLeadsAction(), 30000);
       // Fire and forget
       startBotAction(leads).catch(err => {
         console.error("Bot error:", err);
@@ -145,7 +145,7 @@ export function MonitorClient() {
     setLoading("pause");
     setError(null);
     try {
-      await withTimeout(pauseBotAction(), 5000);
+      await withTimeout(pauseBotAction(), 15000);
     } catch (err: any) {
       console.error("Failed to pause:", err);
       setError(err.message || "Failed to pause");
@@ -158,7 +158,7 @@ export function MonitorClient() {
     setLoading("resume");
     setError(null);
     try {
-      await withTimeout(resumeBotAction(), 5000);
+      await withTimeout(resumeBotAction(), 15000);
     } catch (err: any) {
       console.error("Failed to resume:", err);
       setError(err.message || "Failed to resume");
@@ -171,7 +171,7 @@ export function MonitorClient() {
     setLoading("stop");
     setError(null);
     try {
-      await withTimeout(stopBotAction(), 5000);
+      await withTimeout(stopBotAction(), 15000);
     } catch (err: any) {
       console.error("Failed to stop:", err);
       setError(err.message || "Failed to stop");
@@ -183,7 +183,7 @@ export function MonitorClient() {
   const handleClearLogs = async () => {
     setLoading("clear");
     try {
-      await withTimeout(clearBotLogs(), 5000);
+      await withTimeout(clearBotLogs(), 15000);
     } catch (err: any) {
       console.error("Failed to clear logs:", err);
       setError(err.message || "Failed to clear");

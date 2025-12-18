@@ -32,8 +32,9 @@ async function login() {
         console.log("   Created session directory");
     }
     
-    // Check for DISPLAY
-    if (!process.env.DISPLAY) {
+    // Check for DISPLAY on Linux
+    const isLinux = process.platform === 'linux';
+    if (isLinux && !process.env.DISPLAY) {
         console.log("\n⚠️  WARNING: DISPLAY is not set!");
         console.log("   Try: export DISPLAY=:0");
         console.log("   Or use SSH with X forwarding: ssh -X user@server");
@@ -42,9 +43,15 @@ async function login() {
     
     console.log("\n🚀 Launching Chrome in headful mode...\n");
     
+    // Use system Chrome on Mac, puppeteer's on Linux
+    const executablePath = process.platform === 'darwin' 
+        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        : undefined;  // Use puppeteer default on Linux
+    
     const browser = await puppeteer.launch({
         headless: false,  // HEADFUL - shows actual window
         userDataDir: sessionDir,
+        executablePath,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
