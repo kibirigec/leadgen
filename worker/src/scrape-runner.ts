@@ -10,7 +10,7 @@ import { getDb, updateWorkerStatus } from './firebase';
 import { ApifyClient } from 'apify-client';
 import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
 import { isPhoneUsed } from './deduplication';
-import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './notifications';
+import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './telegram';
 
 type LogFn = (level: string, message: string) => void;
 

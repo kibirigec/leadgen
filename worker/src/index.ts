@@ -120,6 +120,17 @@ app.post('/trigger/test-dispatch', async (req, res) => {
     }
 });
 
+// Test Telegram notification
+app.post('/trigger/test-telegram', async (req, res) => {
+    try {
+        const { sendTestNotification } = await import('./telegram');
+        const success = await sendTestNotification();
+        res.json({ success, message: success ? 'Check Telegram!' : 'Failed to send' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // ============================================
 // CRON JOBS (EAT = UTC+3)
 // ============================================

@@ -7,7 +7,7 @@
 import { getDb, updateWorkerStatus } from './firebase';
 import { runWhatsAppBot } from './bot';
 import { markPhoneUsed } from './deduplication';
-import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './notifications';
+import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './telegram';
 
 type LogFn = (level: string, message: string) => void;
 type TimeWindow = 'morning' | 'lunch' | 'evening';
