@@ -136,11 +136,12 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                             const isUsed = await isPhoneUsed(item.phone as string);
                             if (isUsed) continue;
 
+
                             const lead: ScrapedLead = {
-                                name: item.title as string,
+                                name: (item.title as string) || 'Unknown',
                                 phone: item.phone as string,
-                                address: item.address as string,
-                                website: item.website as string,
+                                address: (item.address as string) || '',
+                                website: (item.website as string) || '',
                                 businessType: businessType.type,
                                 city,
                                 timeWindow: window,
