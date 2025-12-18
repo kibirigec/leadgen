@@ -1,9 +1,11 @@
 /**
- * Scrape Runner with Suburb-Level Rotation
+ * Scrape Runner with Keyword Rotation
  * 
  * Features:
- * - Suburb-level granularity (not just city)
- * - 7-day cooldown per businessType+suburb combination
+ * - 14 business types with multiple keywords each
+ * - 1 keyword per business type per day (rotates daily)
+ * - 7-day cooldown per (keyword + suburb + city) combination
+ * - Suburb-level granularity (70+ suburbs across 16 cities)
  * - Reserve pool integration
  * - Daily limits: 30 morning + 30 lunch + 40 evening = 100/day
  */
@@ -13,45 +15,11 @@ import { ApifyClient } from 'apify-client';
 import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
 import { isPhoneUsed } from './deduplication';
 import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './telegram';
-import { LOCATION_ROTATION, getTodaysCity, getSuburbsForCity } from './location-rotation';
-import { isAvailableForScrape, markAsScraped, getNextAvailableSuburb } from './rotation-tracker';
+import { getTodaysCity, getSuburbsForCity } from './location-rotation';
+import { isAvailableForScrape, markAsScraped } from './rotation-tracker';
+import { KEYWORD_MATRIX, getTodaysKeyword, getBusinessTypesForWindow, WINDOW_QUOTAS } from './keyword-matrix';
 
 type LogFn = (level: string, message: string) => void;
-
-// Business types per time window with daily quotas
-const TIME_WINDOWS = {
-    morning: {
-        totalMessages: 30,
-        businessTypes: [
-            { type: 'clinic', keywords: ['clinic', 'medical center', 'health center'], dailyQuota: 10 },
-            { type: 'dental', keywords: ['dental clinic', 'dentist'], dailyQuota: 8 },
-            { type: 'law', keywords: ['law firm', 'advocate', 'lawyer'], dailyQuota: 5 },
-            { type: 'school', keywords: ['school', 'training center', 'academy'], dailyQuota: 4 },
-            { type: 'realtor', keywords: ['real estate agent', 'property agent'], dailyQuota: 3 },
-        ],
-    },
-    lunch: {
-        totalMessages: 30,
-        businessTypes: [
-            { type: 'restaurant', keywords: ['restaurant', 'cafe', 'eatery'], dailyQuota: 10 },
-            { type: 'salon', keywords: ['salon', 'barbershop', 'spa'], dailyQuota: 8 },
-            { type: 'gym', keywords: ['gym', 'fitness center'], dailyQuota: 6 },
-            { type: 'pharmacy', keywords: ['pharmacy', 'chemist'], dailyQuota: 4 },
-            { type: 'courier', keywords: ['courier', 'delivery service'], dailyQuota: 2 },
-        ],
-    },
-    evening: {
-        totalMessages: 40,
-        businessTypes: [
-            { type: 'bar', keywords: ['bar', 'lounge', 'nightclub'], dailyQuota: 10 },
-            { type: 'restaurant', keywords: ['restaurant', 'grill'], dailyQuota: 8 },
-            { type: 'clinic', keywords: ['clinic', 'pharmacy'], dailyQuota: 6 },
-            { type: 'mechanic', keywords: ['garage', 'auto repair', 'mechanic'], dailyQuota: 6 },
-            { type: 'hotel', keywords: ['hotel', 'lodge', 'guest house'], dailyQuota: 5 },
-            { type: 'realtor', keywords: ['real estate', 'property'], dailyQuota: 5 },
-        ],
-    },
-};
 
 interface ScrapedLead {
     name: string;
@@ -59,6 +27,7 @@ interface ScrapedLead {
     address?: string;
     website?: string;
     businessType: string;
+    keyword: string;
     city: string;
     suburb: string;
     timeWindow: TimeWindow;
@@ -73,7 +42,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
     const todaysCity = getTodaysCity();
     const suburbs = getSuburbsForCity(todaysCity);
 
-    log('info', `Starting scrape for ${today}`);
+    log('info', `🚀 Starting scrape for ${today}`);
     log('info', `📍 City: ${todaysCity} (${suburbs.length} suburbs)`);
 
     // Send start notification
@@ -84,11 +53,14 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
     const apifyClient = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
     // Process each time window
-    for (const [windowName, config] of Object.entries(TIME_WINDOWS)) {
+    for (const windowName of ['morning', 'lunch', 'evening'] as const) {
         const window = windowName as TimeWindow;
-        const windowLimit = limit ? Math.min(limit, config.totalMessages) : config.totalMessages;
+        const windowQuota = WINDOW_QUOTAS[window];
+        const windowLimit = limit ? Math.min(limit, windowQuota) : windowQuota;
+        const businessTypes = getBusinessTypesForWindow(window);
 
         log('info', `\n📋 ${window.toUpperCase()} WINDOW (need ${windowLimit} leads)`);
+        log('info', `   Business types: ${businessTypes.map(b => b.type).join(', ')}`);
 
         // Step 1: Pull from reserve pool first
         log('info', `  1️⃣ Checking reserve pool...`);
@@ -100,8 +72,9 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
             phone: r.phone,
             address: r.address,
             businessType: r.businessType,
+            keyword: '',
             city: r.city,
-            suburb: '', // Reserve leads may not have suburb
+            suburb: '',
             timeWindow: window,
             priority: r.priority,
         }));
@@ -115,22 +88,24 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
             const freshLeads: ScrapedLead[] = [];
             const excessLeads: ScrapedLead[] = [];
 
-            for (const businessType of config.businessTypes) {
-                const keyword = businessType.keywords[0];
+            for (const businessType of businessTypes) {
+                // Get today's keyword for this business type
+                const keyword = getTodaysKeyword(businessType);
+                log('info', `\n     📌 ${businessType.type.toUpperCase()}: "${keyword}"`);
 
-                // Find available suburbs (not on cooldown)
+                // Find available suburbs (not on cooldown for this keyword)
                 for (const suburb of suburbs) {
-                    // Check cooldown
-                    const available = await isAvailableForScrape(businessType.type, suburb);
+                    // Check cooldown for this specific keyword+suburb
+                    const available = await isAvailableForScrape(keyword, suburb);
                     if (!available) {
-                        log('info', `     ⏸️ Skipping: ${keyword} in ${suburb} (cooldown)`);
+                        log('info', `        ⏸️ ${suburb} (cooldown)`);
                         continue;
                     }
 
                     try {
-                        // Build suburb-level query
+                        // Build query: {keyword} in {suburb}
                         const searchQuery = `${keyword} in ${suburb}`;
-                        log('info', `     🔍 Scraping: ${searchQuery}`);
+                        log('info', `        🔍 ${searchQuery}`);
 
                         const run = await apifyClient.actor('compass/crawler-google-places').call({
                             searchStringsArray: [searchQuery],
@@ -141,8 +116,8 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
 
                         const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
 
-                        // Mark this combination as scraped
-                        await markAsScraped(businessType.type, suburb, items.length);
+                        // Mark this keyword+suburb as scraped
+                        await markAsScraped(keyword, suburb, items.length);
 
                         let suburbUsable = 0;
                         for (const item of items) {
@@ -158,6 +133,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                                 address: (item.address as string) || '',
                                 website: (item.website as string) || '',
                                 businessType: businessType.type,
+                                keyword,
                                 city: todaysCity,
                                 suburb,
                                 timeWindow: window,
@@ -172,13 +148,13 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                             }
                         }
 
-                        log('info', `       ✅ Found ${items.length} results, ${suburbUsable} usable`);
+                        log('info', `           ✅ ${items.length} found, ${suburbUsable} usable`);
 
                         // Stop if we have enough
                         if (freshLeads.length >= stillNeeded) break;
 
                     } catch (error: any) {
-                        log('error', `     ❌ Error: ${error.message}`);
+                        log('error', `           ❌ ${error.message}`);
                     }
                 }
 
@@ -209,6 +185,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                 phone: lead.phone,
                 address: lead.address,
                 businessType: lead.businessType,
+                keyword: lead.keyword,
                 city: lead.city,
                 suburb: lead.suburb,
                 timeWindow: window,

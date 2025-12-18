@@ -15,10 +15,10 @@ interface RotationEntry {
 }
 
 /**
- * Generate a unique key for tracking
+ * Generate a unique key for tracking (keyword + suburb + city)
  */
-function getRotationKey(businessType: string, suburb: string): string {
-    return `${businessType}::${suburb}`.toLowerCase().replace(/\s+/g, '_');
+function getRotationKey(keyword: string, suburb: string): string {
+    return `${keyword}::${suburb}`.toLowerCase().replace(/\s+/g, '_').replace(/,/g, '');
 }
 
 /**
