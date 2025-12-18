@@ -14,7 +14,7 @@ export interface OutreachHistoryEntry {
     firstContactedAt: string;
     lastContactedAt: string;
     totalAttempts: number;
-    status: "contacted" | "replied" | "blocked";
+    status: "contacted" | "replied" | "blocked" | "failed";
 }
 
 /**
@@ -60,7 +60,7 @@ export async function isPhoneUsed(phone: string): Promise<boolean> {
 export async function markPhoneUsed(
     phone: string,
     businessName: string,
-    status: "contacted" | "replied" | "blocked" = "contacted"
+    status: "contacted" | "replied" | "blocked" | "failed" = "contacted"
 ): Promise<void> {
     const normalizedPhone = normalizePhone(phone);
     const now = new Date().toISOString();

@@ -18,7 +18,7 @@ import {
     TimeWindow
 } from "./outreach-config";
 import { isPhoneUsed } from "./deduplication";
-import { saveLeadsToQueue, getTodayString, QueuedLead } from "./leads-queue";
+import { saveLeadsToQueue, getTodayString, QueuedLead, cleanupOldQueue } from "./leads-queue";
 import { db } from "./firebase";
 import {
     addToReservePool,
@@ -29,6 +29,7 @@ import {
 } from "./reserve-pool";
 import { isComboUsed, markComboUsed, getAvailableKeywords } from "./rotation-tracker";
 import { logScrapeStats, logReservePoolStats } from "./daily-summary";
+import { saveRawLeads, RawLead, cleanupOldRawLeads } from "./leads-raw";
 
 const apifyClient = new ApifyClient({
     token: process.env.APIFY_API_TOKEN,
@@ -73,6 +74,12 @@ export async function runDailyScrape(): Promise<ScrapeResult> {
         lastScrapeStarted: new Date().toISOString(),
         status: "running",
     }, { merge: true });
+
+    // CLEANUP: Clear old queue entries and raw leads
+    console.log("🧹 Cleaning up old data...");
+    const queueCleaned = await cleanupOldQueue();
+    const rawCleaned = await cleanupOldRawLeads();
+    console.log(`   Cleared ${queueCleaned} old queue entries, ${rawCleaned} old raw leads`);
 
     // Log scrape start
     await logScrapeStats({
@@ -141,6 +148,22 @@ export async function runDailyScrape(): Promise<ScrapeResult> {
                         );
 
                         totalScraped += leads.length;
+
+                        // SAVE RAW LEADS (before filtering) for audit trail
+                        const rawLeads: RawLead[] = leads.map(lead => ({
+                            id: lead.id,
+                            businessName: lead.name,
+                            phoneRaw: lead.phone,
+                            city,
+                            businessType: businessType.type,
+                            keywords: keyword,
+                            rating: lead.rating,
+                            website: lead.website,
+                            address: lead.address,
+                            scrapedAt: new Date().toISOString(),
+                            scrapeDate: today,
+                        }));
+                        await saveRawLeads(rawLeads);
 
                         // Mark combo as used
                         await markComboUsed(city, keyword);

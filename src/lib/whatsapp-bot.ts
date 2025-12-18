@@ -469,8 +469,10 @@ export async function runWhatsAppBot(
                 await onLogEvent("info", `Message sent successfully`, lead.name);
             }
 
-            // Wait before next message
-            await new Promise(r => setTimeout(r, 3000));
+            // Wait 30-60 seconds before next message (human-like pacing)
+            const delayMs = 30000 + Math.floor(Math.random() * 30000); // 30-60 sec
+            console.log(`   ⏳ Waiting ${Math.round(delayMs / 1000)}s before next message...`);
+            await new Promise(r => setTimeout(r, delayMs));
 
         } catch (e: any) {
             console.error(`❌ Failed to send to ${lead.name}:`, e);
