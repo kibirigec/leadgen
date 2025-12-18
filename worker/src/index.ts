@@ -99,9 +99,9 @@ app.post('/trigger/dispatch/:window', async (req, res) => {
 // ============================================
 
 app.post('/trigger/test-scrape', async (req, res) => {
-    addLog('info', '🧪 TEST scrape triggered (10 leads only)');
+    addLog('info', '🧪 TEST scrape triggered (3 leads only)');
     try {
-        const result = await runScrape(addLog, 10); // Pass limit
+        const result = await runScrape(addLog, 3); // Pass limit
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Test scrape failed: ${error.message}`);
@@ -110,9 +110,9 @@ app.post('/trigger/test-scrape', async (req, res) => {
 });
 
 app.post('/trigger/test-dispatch', async (req, res) => {
-    addLog('info', '🧪 TEST dispatch triggered (5 messages only)');
+    addLog('info', '🧪 TEST dispatch triggered (3 messages only)');
     try {
-        const result = await runDispatch('morning', addLog, 5); // Pass limit
+        const result = await runDispatch('morning', addLog, 3); // Pass limit
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Test dispatch failed: ${error.message}`);
