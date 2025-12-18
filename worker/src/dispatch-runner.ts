@@ -12,20 +12,22 @@ type TimeWindow = 'morning' | 'lunch' | 'evening';
 
 export async function runDispatch(
     window: TimeWindow,
-    log: LogFn
+    log: LogFn,
+    limit?: number
 ): Promise<{ success: boolean; sentCount: number }> {
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
 
-    log('info', `Starting ${window} dispatch`);
+    log('info', `Starting ${window} dispatch${limit ? ` (limit: ${limit})` : ''}`);
 
     // Get pending leads for this window
+    const defaultLimit = window === 'evening' ? 40 : 30;
     const snapshot = await db.collection('leads_queue')
         .where('timeWindow', '==', window)
         .where('dispatchDate', '==', today)
         .where('status', '==', 'pending')
         .orderBy('priority', 'desc')
-        .limit(window === 'evening' ? 40 : 30)
+        .limit(limit || defaultLimit)
         .get();
 
     if (snapshot.empty) {

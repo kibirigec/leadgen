@@ -54,7 +54,7 @@ const WEEKLY_ROTATION: Record<number, string[]> = {
     6: ['Fort Portal', 'Kasese'],
 };
 
-export async function runScrape(log: LogFn): Promise<{ success: boolean; totalScraped: number }> {
+export async function runScrape(log: LogFn, limit?: number): Promise<{ success: boolean; totalScraped: number }> {
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
     const dayOfWeek = new Date().getDay();
@@ -103,8 +103,17 @@ export async function runScrape(log: LogFn): Promise<{ success: boolean; totalSc
                                 createdAt: new Date().toISOString(),
                             });
                             totalScraped++;
+
+                            // Check limit for test mode
+                            if (limit && totalScraped >= limit) {
+                                log('info', `  Reached limit of ${limit} leads`);
+                                break;
+                            }
                         }
                     }
+
+                    // Exit early if limit reached
+                    if (limit && totalScraped >= limit) break;
 
                     log('info', `    Found ${items.length} results, ${items.filter((i: any) => i.phone).length} with phone`);
                 } catch (error: any) {

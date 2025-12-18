@@ -95,6 +95,32 @@ app.post('/trigger/dispatch/:window', async (req, res) => {
 });
 
 // ============================================
+// TEST ENDPOINTS (Small batches for testing)
+// ============================================
+
+app.post('/trigger/test-scrape', async (req, res) => {
+    addLog('info', '🧪 TEST scrape triggered (10 leads only)');
+    try {
+        const result = await runScrape(addLog, 10); // Pass limit
+        res.json({ success: true, result });
+    } catch (error: any) {
+        addLog('error', `Test scrape failed: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/trigger/test-dispatch', async (req, res) => {
+    addLog('info', '🧪 TEST dispatch triggered (5 messages only)');
+    try {
+        const result = await runDispatch('morning', addLog, 5); // Pass limit
+        res.json({ success: true, result });
+    } catch (error: any) {
+        addLog('error', `Test dispatch failed: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
 // CRON JOBS (EAT = UTC+3)
 // ============================================
 
