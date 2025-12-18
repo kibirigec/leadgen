@@ -11,7 +11,7 @@ import { doc, setDoc } from 'firebase/firestore';
 let messaging: ReturnType<typeof getMessaging> | null = null;
 
 // VAPID Key from Firebase Console -> Project Settings -> Cloud Messaging -> Web Push certificates
-const VAPID_KEY = 'BHs-K8Ql8Q1rKmRuDhC4dN5KjY2Y5l_example_key'; // TODO: Replace with real key
+const VAPID_KEY = 'BPolvq-3VrZZAOyB5O26DFxwYorrclJzpS1KS5BY3FJAkCx7J9zrdWIMH8HjSGOdJQZrR53MBEkJHERN40-vvlM';
 
 /**
  * Initialize messaging (must be called in browser)
