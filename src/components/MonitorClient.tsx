@@ -49,15 +49,28 @@ export function MonitorClient() {
     ]);
   };
 
-  // Fetch lead stats
+  // Fetch lead stats from leads_queue collection
   const fetchLeadStats = async () => {
     try {
-      const leads = await withTimeout(getSavedLeadsAction(), 30000);
-      const contacted = leads.filter(l => l.status === 'contacted').length;
-      const pending = leads.filter(l => l.phone && l.status !== 'contacted').length;
+      const today = new Date().toISOString().split('T')[0];
+      const queueRef = collection(clientDb, 'leads_queue');
+      
+      // Get all leads for today
+      const allLeadsQuery = query(queueRef, where('dispatchDate', '==', today));
+      const allSnap = await getDocs(allLeadsQuery);
+      
+      // Count by status
+      let pending = 0;
+      let sent = 0;
+      allSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.status === 'sent') sent++;
+        else if (data.status === 'pending') pending++;
+      });
+      
       setLeadStats({
-        total: leads.length,
-        contacted,
+        total: allSnap.size,
+        contacted: sent,
         pending
       });
     } catch (err) {
@@ -126,17 +139,20 @@ export function MonitorClient() {
     setLoading("start");
     setError(null);
     try {
-      const leads = await withTimeout(getSavedLeadsAction(), 30000);
-      // Fire and forget
-      startBotAction(leads).catch(err => {
-        console.error("Bot error:", err);
-        setError("Failed to start bot");
+      // Call worker API to start test dispatch
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+      const response = await fetch(`${workerUrl}/trigger/test-dispatch`, {
+        method: 'POST',
       });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to start');
+      }
+      console.log('Worker dispatch started');
     } catch (err: any) {
       console.error("Failed to start bot:", err);
       setError(err.message || "Failed to start");
     } finally {
-      // Always clear loading after 1 second
       setTimeout(() => setLoading(null), 1000);
     }
   };
@@ -324,17 +340,17 @@ export function MonitorClient() {
 
       {/* Control Buttons */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        {/* Start Button */}
+        {/* Start Button - enabled when idle or stopped */}
         <button
           onClick={handleStart}
-          disabled={loading !== null || isRunning || leadStats.pending === 0}
+          disabled={loading !== null || status.status === 'running' || status.status === 'paused'}
           className="flex flex-col items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 p-4 rounded-xl transition-colors"
         >
           <Rocket className="w-6 h-6" />
           <span className="text-xs font-medium">Start</span>
         </button>
 
-        {/* Pause/Resume Button */}
+        {/* Pause/Resume Button - only enabled when running or paused */}
         {status.status === "paused" ? (
           <button
             onClick={handleResume}
@@ -347,7 +363,7 @@ export function MonitorClient() {
         ) : (
           <button
             onClick={handlePause}
-            disabled={loading !== null}
+            disabled={loading !== null || status.status !== 'running'}
             className="flex flex-col items-center gap-2 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 p-4 rounded-xl transition-colors"
           >
             <Pause className="w-6 h-6" />
@@ -355,10 +371,10 @@ export function MonitorClient() {
           </button>
         )}
 
-        {/* Stop Button */}
+        {/* Stop Button - only enabled when running or paused */}
         <button
           onClick={handleStop}
-          disabled={loading !== null}
+          disabled={loading !== null || (status.status !== 'running' && status.status !== 'paused')}
           className="flex flex-col items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 p-4 rounded-xl transition-colors"
         >
           <Square className="w-6 h-6" />
