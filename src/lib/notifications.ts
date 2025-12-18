@@ -4,7 +4,7 @@
  * Handles FCM token registration and permission requests
  */
 
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 import { app, clientDb } from './firebase-client';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -26,7 +26,15 @@ export async function initMessaging(): Promise<boolean> {
     }
 
     try {
+        // Check if FCM is supported in this browser
+        const supported = await isSupported();
+        if (!supported) {
+            console.warn('Firebase Messaging is not supported in this browser');
+            return false;
+        }
+
         messaging = getMessaging(app);
+        console.log('FCM initialized successfully');
         return true;
     } catch (error) {
         console.error('Failed to initialize messaging:', error);
