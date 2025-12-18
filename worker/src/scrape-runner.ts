@@ -104,16 +104,23 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                             });
                             totalScraped++;
 
-                            // Check limit for test mode
+                            // Check limit for test mode - return immediately
                             if (limit && totalScraped >= limit) {
-                                log('info', `  Reached limit of ${limit} leads`);
-                                break;
+                                log('info', `  Reached limit of ${limit} leads - stopping`);
+
+                                // Update worker status
+                                await updateWorkerStatus({
+                                    lastScrape: {
+                                        date: new Date().toISOString(),
+                                        success: true,
+                                        leadsScraped: totalScraped,
+                                    },
+                                });
+
+                                return { success: true, totalScraped };
                             }
                         }
                     }
-
-                    // Exit early if limit reached
-                    if (limit && totalScraped >= limit) break;
 
                     log('info', `    Found ${items.length} results, ${items.filter((i: any) => i.phone).length} with phone`);
                 } catch (error: any) {
