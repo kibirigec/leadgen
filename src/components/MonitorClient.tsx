@@ -30,12 +30,23 @@ interface LeadStats {
   pending: number;
 }
 
+interface WindowStats {
+  morning: { pending: number; sent: number };
+  lunch: { pending: number; sent: number };
+  evening: { pending: number; sent: number };
+}
+
 export function MonitorClient() {
   const [status, setStatus] = useState<BotStatus>({ status: "idle" });
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [leadStats, setLeadStats] = useState<LeadStats>({ total: 0, contacted: 0, pending: 0 });
+  const [windowStats, setWindowStats] = useState<WindowStats>({
+    morning: { pending: 0, sent: 0 },
+    lunch: { pending: 0, sent: 0 },
+    evening: { pending: 0, sent: 0 },
+  });
   const [error, setError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -66,24 +77,37 @@ export function MonitorClient() {
       // Get ALL leads
       const allSnap = await getDocs(queueRef);
       
-      // Count by status
+      // Count by status and window
       let pendingInWindow = 0;
       let sent = 0;
+      const windows = {
+        morning: { pending: 0, sent: 0 },
+        lunch: { pending: 0, sent: 0 },
+        evening: { pending: 0, sent: 0 },
+      };
+      
       allSnap.forEach(doc => {
         const data = doc.data();
-        if (data.status === 'sent') sent++;
-        else if (data.status === 'pending' && data.timeWindow === currentWindow) {
-          pendingInWindow++;
+        const win = data.timeWindow as 'morning' | 'lunch' | 'evening';
+        
+        if (data.status === 'sent') {
+          sent++;
+          if (win && windows[win]) windows[win].sent++;
+        } else if (data.status === 'pending') {
+          if (win && windows[win]) windows[win].pending++;
+          if (win === currentWindow) pendingInWindow++;
         }
       });
       
       console.log(`Stats: total=${allSnap.size}, sent=${sent}, pending(${currentWindow})=${pendingInWindow}`);
+      console.log('Window breakdown:', windows);
       
       setLeadStats({
         total: allSnap.size,
         contacted: sent,
         pending: pendingInWindow
       });
+      setWindowStats(windows);
     } catch (err) {
       console.error("Error fetching lead stats:", err);
     }
@@ -305,7 +329,31 @@ export function MonitorClient() {
         <div className="bg-slate-800 rounded-xl p-4 text-center">
           <AlertCircle className="w-5 h-5 mx-auto mb-1 text-yellow-400" />
           <p className="text-2xl font-bold text-yellow-400">{leadStats.pending}</p>
-          <p className="text-xs text-slate-400">Pending</p>
+          <p className="text-xs text-slate-400">Pending (Current)</p>
+        </div>
+      </div>
+
+      {/* Window Breakdown */}
+      <div className="bg-slate-800 rounded-2xl p-4 mb-6">
+        <h3 className="text-sm text-slate-400 mb-3">📊 Dispatch Windows</h3>
+        <div className="space-y-2">
+          {(['morning', 'lunch', 'evening'] as const).map((win) => (
+            <div key={win} className="flex items-center justify-between text-sm">
+              <span className="capitalize flex items-center gap-2">
+                {win === 'morning' && '☀️'}
+                {win === 'lunch' && '🌤️'}
+                {win === 'evening' && '🌙'}
+                {win}
+                {getCurrentWindow() === win && (
+                  <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded">NOW</span>
+                )}
+              </span>
+              <div className="flex gap-4">
+                <span className="text-yellow-400">{windowStats[win].pending} pending</span>
+                <span className="text-green-400">{windowStats[win].sent} sent</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
