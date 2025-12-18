@@ -51,8 +51,11 @@ export async function runDispatch(
     try {
         const result = await runWhatsAppBot(leads, log);
 
+        log('info', `Bot finished. Contacted IDs: ${result.contactedLeadIds.join(', ')}`);
+
         // Mark leads as sent
         for (const leadId of result.contactedLeadIds) {
+            log('info', `  Marking lead ${leadId} as sent`);
             await db.collection('leads_queue').doc(leadId).update({
                 status: 'sent',
                 sentAt: new Date().toISOString(),
