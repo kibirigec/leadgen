@@ -1,14 +1,14 @@
 /**
  * WhatsApp Bot for Worker
  * 
- * Simplified bot that runs in the worker process
+ * Linked to main app's Firestore for monitor dashboard sync
  */
 
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import os from 'os';
 import path from 'path';
-import fs from 'fs';
+import { getDb } from './firebase';
 
 puppeteer.use(StealthPlugin());
 
@@ -22,6 +22,43 @@ interface Lead {
     businessType?: string;
 }
 
+// TEST MODE: All messages go to this number
+const TEST_PHONE = "256775910888";
+
+// Update bot status in Firestore (for /monitor dashboard)
+async function updateBotStatus(data: {
+    status: string;
+    currentLead?: string;
+    totalLeads?: number;
+    processedLeads?: number;
+    errorCount?: number;
+}) {
+    try {
+        const db = getDb();
+        await db.collection('system').doc('bot_status').set({
+            ...data,
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+    } catch (e) {
+        console.error('Failed to update bot status:', e);
+    }
+}
+
+// Add log entry to Firestore (for /monitor dashboard)
+async function addBotLog(type: 'info' | 'error' | 'warning', message: string, leadName?: string) {
+    try {
+        const db = getDb();
+        await db.collection('bot_logs').add({
+            type,
+            message,
+            leadName: leadName || null,
+            timestamp: new Date().toISOString(),
+        });
+    } catch (e) {
+        console.error('Failed to add bot log:', e);
+    }
+}
+
 export async function runWhatsAppBot(
     leads: Lead[],
     log: LogFn
@@ -30,6 +67,11 @@ export async function runWhatsAppBot(
 
     log('info', `Starting bot with ${leads.length} leads`);
     log('info', `Session: ${sessionDir}`);
+    log('info', `TEST MODE: All messages going to ${TEST_PHONE}`);
+
+    // Update dashboard status
+    await updateBotStatus({ status: 'starting', totalLeads: leads.length, processedLeads: 0, errorCount: 0 });
+    await addBotLog('info', `Bot starting with ${leads.length} leads (TEST MODE)`);
 
     const browser = await puppeteer.launch({
         headless: true,
@@ -48,10 +90,13 @@ export async function runWhatsAppBot(
     await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 2 });
 
     let sentCount = 0;
+    let errorCount = 0;
     const contactedLeadIds: string[] = [];
 
     try {
         log('info', 'Navigating to WhatsApp Web...');
+        await addBotLog('info', 'Navigating to WhatsApp Web...');
+
         await page.goto('https://web.whatsapp.com', {
             waitUntil: 'networkidle2',
             timeout: 120000,
@@ -61,17 +106,27 @@ export async function runWhatsAppBot(
         const loginSelector = '[data-testid="chat-list"], #side';
         await page.waitForSelector(loginSelector, { timeout: 60000 });
         log('info', 'Logged in successfully');
+        await addBotLog('info', 'Logged in to WhatsApp Web');
+        await updateBotStatus({ status: 'running' });
 
         // Process each lead
-        for (const lead of leads) {
+        for (let i = 0; i < leads.length; i++) {
+            const lead = leads[i];
+
             try {
                 log('info', `Processing: ${lead.name}`);
+                await updateBotStatus({
+                    status: 'running',
+                    currentLead: lead.name,
+                    processedLeads: i,
+                    totalLeads: leads.length,
+                    errorCount,
+                });
 
-                const phone = normalizePhone(lead.phone);
                 const message = getMessage(lead.name, lead.businessType || 'business');
 
-                // Use WhatsApp Web direct link format
-                const url = `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+                // TEST MODE: Use test phone instead of actual lead phone
+                const url = `https://web.whatsapp.com/send?phone=${TEST_PHONE}&text=${encodeURIComponent(message)}`;
 
                 await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
@@ -96,18 +151,11 @@ export async function runWhatsAppBot(
                 }
 
                 if (!found) {
-                    // Check if there's an "invalid number" message
-                    const invalidCheck = await page.$('div[data-testid="popup-contents"]');
-                    if (invalidCheck) {
-                        log('warning', `  Phone ${phone} may be invalid - skipping`);
-                        continue;
-                    }
-
-                    // Take screenshot for debugging
-                    const screenshotPath = `/tmp/debug_${phone}.png`;
+                    const screenshotPath = `/tmp/debug_${TEST_PHONE}_${i}.png`;
                     await page.screenshot({ path: screenshotPath, fullPage: true });
                     log('warning', `  Could not find input box - screenshot saved to ${screenshotPath}`);
-                    log('warning', `  URL was: ${page.url()}`);
+                    await addBotLog('warning', `Could not find input box`, lead.name);
+                    errorCount++;
                     continue;
                 }
 
@@ -120,7 +168,8 @@ export async function runWhatsAppBot(
 
                 sentCount++;
                 contactedLeadIds.push(lead.id);
-                log('info', `✅ Sent to ${lead.name} (${phone})`);
+                log('info', `✅ Sent to ${lead.name} (test: ${TEST_PHONE})`);
+                await addBotLog('info', `Message sent successfully (test mode)`, lead.name);
 
                 // Human-like delay (30-60 seconds)
                 const delay = 30000 + Math.floor(Math.random() * 30000);
@@ -129,24 +178,24 @@ export async function runWhatsAppBot(
 
             } catch (error: any) {
                 log('error', `Failed for ${lead.name}: ${error.message}`);
+                await addBotLog('error', error.message, lead.name);
+                errorCount++;
             }
         }
     } finally {
         await browser.close();
     }
 
-    return { success: true, sentCount, contactedLeadIds };
-}
+    // Final status update
+    await updateBotStatus({
+        status: 'idle',
+        processedLeads: leads.length,
+        totalLeads: leads.length,
+        errorCount,
+    });
+    await addBotLog('info', `Bot finished. Sent: ${sentCount}, Errors: ${errorCount}`);
 
-function normalizePhone(phone: string): string {
-    let cleaned = phone.replace(/\D/g, '');
-    if (cleaned.startsWith('0')) {
-        cleaned = '256' + cleaned.slice(1);
-    }
-    if (!cleaned.startsWith('256') && cleaned.length === 9) {
-        cleaned = '256' + cleaned;
-    }
-    return cleaned;
+    return { success: true, sentCount, contactedLeadIds };
 }
 
 function getMessage(businessName: string, businessType: string): string {
