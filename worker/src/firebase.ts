@@ -77,3 +77,9 @@ export async function getWorkerStatus(): Promise<WorkerStatus> {
 export async function updateWorkerStatus(update: Partial<WorkerStatus>): Promise<void> {
     await db.collection('system').doc('worker_status').set(update, { merge: true });
 }
+
+// Get current bot status (for pause/stop checks)
+export async function getBotStatus(): Promise<string> {
+    const doc = await db.collection('system').doc('bot_status').get();
+    return doc.data()?.status || 'idle';
+}

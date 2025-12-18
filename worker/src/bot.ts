@@ -8,7 +8,7 @@ import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import os from 'os';
 import path from 'path';
-import { getDb } from './firebase';
+import { getDb, getBotStatus } from './firebase';
 
 puppeteer.use(StealthPlugin());
 
@@ -112,6 +112,32 @@ export async function runWhatsAppBot(
         // Process each lead
         for (let i = 0; i < leads.length; i++) {
             const lead = leads[i];
+
+            // Check for pause/stop before processing each lead
+            const currentStatus = await getBotStatus();
+            log('info', `Status check: ${currentStatus}`);
+
+            if (currentStatus === 'stopped') {
+                log('info', '🛑 Bot stopped by user');
+                await addBotLog('info', 'Bot stopped by user');
+                await updateBotStatus({ status: 'stopped', processedLeads: i, totalLeads: leads.length });
+                break;
+            }
+
+            // Handle pause - wait until resumed or stopped
+            while (currentStatus === 'paused') {
+                log('info', '⏸️ Bot paused, waiting...');
+                await new Promise(r => setTimeout(r, 5000));
+                const newStatus = await getBotStatus();
+                if (newStatus === 'stopped') {
+                    log('info', '🛑 Bot stopped while paused');
+                    await addBotLog('info', 'Bot stopped by user');
+                    await updateBotStatus({ status: 'stopped' });
+                    await browser.close();
+                    return { success: true, sentCount, contactedLeadIds };
+                }
+                if (newStatus !== 'paused') break;
+            }
 
             try {
                 log('info', `Processing: ${lead.name}`);
