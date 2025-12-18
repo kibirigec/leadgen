@@ -52,12 +52,10 @@ export function MonitorClient() {
   // Fetch lead stats from leads_queue collection
   const fetchLeadStats = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
       const queueRef = collection(clientDb, 'leads_queue');
       
-      // Get all leads for today
-      const allLeadsQuery = query(queueRef, where('dispatchDate', '==', today));
-      const allSnap = await getDocs(allLeadsQuery);
+      // Get ALL leads (no date filter)
+      const allSnap = await getDocs(queueRef);
       
       // Count by status
       let pending = 0;
@@ -67,6 +65,8 @@ export function MonitorClient() {
         if (data.status === 'sent') sent++;
         else if (data.status === 'pending') pending++;
       });
+      
+      console.log(`Stats: total=${allSnap.size}, sent=${sent}, pending=${pending}`);
       
       setLeadStats({
         total: allSnap.size,
