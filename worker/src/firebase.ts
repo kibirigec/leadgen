@@ -57,6 +57,7 @@ export interface WorkerStatus {
         date: string;
         success: boolean;
         leadsScraped: number;
+        city?: string;
     };
     lastDispatch?: {
         morning?: string;

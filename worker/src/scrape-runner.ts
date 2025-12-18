@@ -1,9 +1,11 @@
 /**
- * Scrape Runner with Reserve Pool
+ * Scrape Runner with Suburb-Level Rotation
  * 
- * Respects daily limits: 30 morning + 30 lunch + 40 evening = 100/day
- * Pulls from reserve pool first, then scrapes if needed
- * Excess goes to reserve pool for future use
+ * Features:
+ * - Suburb-level granularity (not just city)
+ * - 7-day cooldown per businessType+suburb combination
+ * - Reserve pool integration
+ * - Daily limits: 30 morning + 30 lunch + 40 evening = 100/day
  */
 
 import { getDb, updateWorkerStatus } from './firebase';
@@ -11,10 +13,12 @@ import { ApifyClient } from 'apify-client';
 import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
 import { isPhoneUsed } from './deduplication';
 import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './telegram';
+import { LOCATION_ROTATION, getTodaysCity, getSuburbsForCity } from './location-rotation';
+import { isAvailableForScrape, markAsScraped, getNextAvailableSuburb } from './rotation-tracker';
 
 type LogFn = (level: string, message: string) => void;
 
-// Configuration
+// Business types per time window with daily quotas
 const TIME_WINDOWS = {
     morning: {
         totalMessages: 30,
@@ -49,16 +53,6 @@ const TIME_WINDOWS = {
     },
 };
 
-const WEEKLY_ROTATION: Record<number, string[]> = {
-    0: ['Ntinda', 'Bugolobi', 'Muyenga', 'Kololo'],
-    1: ['Kampala', 'Entebbe'],
-    2: ['Jinja', 'Mukono'],
-    3: ['Mbarara', 'Masaka'],
-    4: ['Gulu', 'Lira'],
-    5: ['Mbale', 'Soroti'],
-    6: ['Fort Portal', 'Kasese'],
-};
-
 interface ScrapedLead {
     name: string;
     phone: string;
@@ -66,6 +60,7 @@ interface ScrapedLead {
     website?: string;
     businessType: string;
     city: string;
+    suburb: string;
     timeWindow: TimeWindow;
     priority: number;
 }
@@ -73,11 +68,13 @@ interface ScrapedLead {
 export async function runScrape(log: LogFn, limit?: number): Promise<{ success: boolean; totalScraped: number }> {
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
-    const dayOfWeek = new Date().getDay();
-    const cities = WEEKLY_ROTATION[dayOfWeek] || WEEKLY_ROTATION[0];
+
+    // Get today's city and its suburbs
+    const todaysCity = getTodaysCity();
+    const suburbs = getSuburbsForCity(todaysCity);
 
     log('info', `Starting scrape for ${today}`);
-    log('info', `Cities: ${cities.join(', ')}`);
+    log('info', `📍 City: ${todaysCity} (${suburbs.length} suburbs)`);
 
     // Send start notification
     await notifyScrapeStart();
@@ -104,6 +101,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
             address: r.address,
             businessType: r.businessType,
             city: r.city,
+            suburb: '', // Reserve leads may not have suburb
             timeWindow: window,
             priority: r.priority,
         }));
@@ -120,19 +118,33 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
             for (const businessType of config.businessTypes) {
                 const keyword = businessType.keywords[0];
 
-                for (const city of cities) {
+                // Find available suburbs (not on cooldown)
+                for (const suburb of suburbs) {
+                    // Check cooldown
+                    const available = await isAvailableForScrape(businessType.type, suburb);
+                    if (!available) {
+                        log('info', `     ⏸️ Skipping: ${keyword} in ${suburb} (cooldown)`);
+                        continue;
+                    }
+
                     try {
-                        log('info', `     Scraping: ${keyword} in ${city}`);
+                        // Build suburb-level query
+                        const searchQuery = `${keyword} in ${suburb}`;
+                        log('info', `     🔍 Scraping: ${searchQuery}`);
 
                         const run = await apifyClient.actor('compass/crawler-google-places').call({
-                            searchStringsArray: [`${keyword} in ${city}, Uganda`],
-                            maxCrawledPlacesPerSearch: businessType.dailyQuota * 3, // 3x buffer
+                            searchStringsArray: [searchQuery],
+                            maxCrawledPlacesPerSearch: businessType.dailyQuota * 2,
                             language: 'en',
                             maxImages: 0,
                         });
 
                         const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
 
+                        // Mark this combination as scraped
+                        await markAsScraped(businessType.type, suburb, items.length);
+
+                        let suburbUsable = 0;
                         for (const item of items) {
                             if (!item.phone) continue;
 
@@ -140,32 +152,33 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                             const isUsed = await isPhoneUsed(item.phone as string);
                             if (isUsed) continue;
 
-
                             const lead: ScrapedLead = {
                                 name: (item.title as string) || 'Unknown',
                                 phone: item.phone as string,
                                 address: (item.address as string) || '',
                                 website: (item.website as string) || '',
                                 businessType: businessType.type,
-                                city,
+                                city: todaysCity,
+                                suburb,
                                 timeWindow: window,
                                 priority: calculatePriority({ hasWebsite: !!item.website, rating: item.totalScore as number }),
                             };
 
                             if (freshLeads.length < stillNeeded) {
                                 freshLeads.push(lead);
+                                suburbUsable++;
                             } else {
                                 excessLeads.push(lead);
                             }
                         }
 
-                        log('info', `       Found ${items.length} results, ${freshLeads.length} usable`);
+                        log('info', `       ✅ Found ${items.length} results, ${suburbUsable} usable`);
 
                         // Stop if we have enough
                         if (freshLeads.length >= stillNeeded) break;
 
                     } catch (error: any) {
-                        log('error', `     Error scraping ${keyword} in ${city}: ${error.message}`);
+                        log('error', `     ❌ Error: ${error.message}`);
                     }
                 }
 
@@ -197,6 +210,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                 address: lead.address,
                 businessType: lead.businessType,
                 city: lead.city,
+                suburb: lead.suburb,
                 timeWindow: window,
                 priority: lead.priority,
                 status: 'pending',
@@ -221,12 +235,14 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
             date: new Date().toISOString(),
             success: true,
             leadsScraped: totalQueued,
+            city: todaysCity,
         },
     });
 
     log('info', `\n🎉 Scrape complete!`);
-    log('info', `   Queued: ${totalQueued} leads`);
-    log('info', `   Reserve: ${totalReserve} leads stored`);
+    log('info', `   📍 City: ${todaysCity}`);
+    log('info', `   📊 Queued: ${totalQueued} leads`);
+    log('info', `   📦 Reserve: ${totalReserve} leads stored`);
 
     // Send completion notification
     await notifyScrapeEnd(totalQueued, totalReserve);
