@@ -10,6 +10,7 @@ import { getDb, updateWorkerStatus } from './firebase';
 import { ApifyClient } from 'apify-client';
 import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
 import { isPhoneUsed } from './deduplication';
+import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './notifications';
 
 type LogFn = (level: string, message: string) => void;
 
@@ -77,6 +78,9 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
 
     log('info', `Starting scrape for ${today}`);
     log('info', `Cities: ${cities.join(', ')}`);
+
+    // Send start notification
+    await notifyScrapeStart();
 
     let totalQueued = 0;
     let totalReserve = 0;
@@ -223,6 +227,9 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
     log('info', `\n🎉 Scrape complete!`);
     log('info', `   Queued: ${totalQueued} leads`);
     log('info', `   Reserve: ${totalReserve} leads stored`);
+
+    // Send completion notification
+    await notifyScrapeEnd(totalQueued, totalReserve);
 
     return { success: true, totalScraped: totalQueued };
 }

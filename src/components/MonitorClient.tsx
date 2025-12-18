@@ -5,7 +5,8 @@ import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, startBotAction } from "@/actions/bot";
 import { getSavedLeadsAction } from "@/actions/leads";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap } from "lucide-react";
+import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 
 interface BotStatus {
   status: string;
@@ -49,6 +50,8 @@ export function MonitorClient() {
   });
   const [error, setError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
 
   // Helper: action with timeout
   const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -169,6 +172,88 @@ export function MonitorClient() {
       return () => clearTimeout(timer);
     }
   }, [error]);
+
+  // Check notification status on mount
+  useEffect(() => {
+    const checkNotifications = async () => {
+      setNotificationsEnabled(areNotificationsEnabled());
+      await initMessaging();
+      
+      // Listen for foreground messages
+      const unsubscribe = onForegroundMessage((payload) => {
+        console.log('Foreground notification:', payload);
+      });
+      
+      return unsubscribe;
+    };
+    
+    checkNotifications();
+  }, []);
+
+  // Fetch reserve pool stats
+  const fetchReservePool = async () => {
+    try {
+      const poolRef = collection(clientDb, 'reserve_pool');
+      const snapshot = await getDocs(query(poolRef, where('status', '==', 'available')));
+      
+      const stats = { morning: 0, lunch: 0, evening: 0, total: 0 };
+      snapshot.forEach(doc => {
+        const win = doc.data().timeWindow as 'morning' | 'lunch' | 'evening';
+        if (win && stats.hasOwnProperty(win)) {
+          stats[win]++;
+          stats.total++;
+        }
+      });
+      
+      setReservePool(stats);
+    } catch (err) {
+      console.error('Error fetching reserve pool:', err);
+    }
+  };
+
+  // Fetch reserve pool on mount and after scrapes
+  useEffect(() => {
+    fetchReservePool();
+  }, [status.status]);
+
+  // Enable/disable notifications
+  const handleToggleNotifications = async () => {
+    if (notificationsEnabled) {
+      // Can't disable programmatically - tell user
+      setError('Use browser settings to disable notifications');
+      return;
+    }
+    
+    setLoading('notifications');
+    try {
+      const token = await requestNotificationPermission();
+      setNotificationsEnabled(!!token);
+      if (token) {
+        console.log('Notifications enabled with token:', token);
+      }
+    } catch (err) {
+      setError('Failed to enable notifications');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  // Quick trigger functions
+  const handleTriggerScrape = async () => {
+    setLoading('scrape');
+    try {
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+      const res = await fetch(`${workerUrl}/trigger/test-scrape`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      await fetchLeadStats();
+      await fetchReservePool();
+    } catch (err: any) {
+      setError(err.message || 'Scrape failed');
+    } finally {
+      setLoading(null);
+    }
+  };
 
   const handleStart = async () => {
     setLoading("start");
@@ -354,6 +439,58 @@ export function MonitorClient() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Reserve Pool */}
+      <div className="bg-slate-800 rounded-2xl p-4 mb-6">
+        <h3 className="text-sm text-slate-400 mb-3">📦 Reserve Pool</h3>
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {(['morning', 'lunch', 'evening', 'total'] as const).map((key) => (
+            <div key={key} className="bg-slate-700/50 rounded-lg p-2">
+              <p className="text-lg font-bold text-purple-400">
+                {key === 'total' ? reservePool.total : reservePool[key]}
+              </p>
+              <p className="text-xs text-slate-400 capitalize">{key}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-slate-800 rounded-2xl p-4 mb-6">
+        <h3 className="text-sm text-slate-400 mb-3">⚡ Quick Actions</h3>
+        <div className="flex gap-3">
+          <button
+            onClick={handleToggleNotifications}
+            disabled={loading === 'notifications'}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
+              notificationsEnabled
+                ? 'bg-green-600 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            {loading === 'notifications' ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : notificationsEnabled ? (
+              <Bell className="w-4 h-4" />
+            ) : (
+              <BellOff className="w-4 h-4" />
+            )}
+            {notificationsEnabled ? 'Enabled' : 'Notify'}
+          </button>
+          <button
+            onClick={handleTriggerScrape}
+            disabled={loading === 'scrape'}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-blue-600 hover:bg-blue-500 transition-all disabled:opacity-50"
+          >
+            {loading === 'scrape' ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Zap className="w-4 h-4" />
+            )}
+            Scrape
+          </button>
         </div>
       </div>
 

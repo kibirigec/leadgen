@@ -7,6 +7,7 @@
 import { getDb, updateWorkerStatus } from './firebase';
 import { runWhatsAppBot } from './bot';
 import { markPhoneUsed } from './deduplication';
+import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './notifications';
 
 type LogFn = (level: string, message: string) => void;
 type TimeWindow = 'morning' | 'lunch' | 'evening';
@@ -42,6 +43,9 @@ export async function runDispatch(
     }));
 
     log('info', `Found ${leads.length} leads to process`);
+
+    // Send start notification
+    await notifyDispatchStart(window, leads.length);
 
     // Update worker status
     await updateWorkerStatus({
@@ -79,9 +83,15 @@ export async function runDispatch(
         });
 
         log('info', `Dispatch complete! Sent: ${result.sentCount}`);
+
+        // Send completion notification
+        const errorCount = leads.length - result.sentCount;
+        await notifyDispatchEnd(window, result.sentCount, leads.length, errorCount);
+
         return { success: true, sentCount: result.sentCount };
     } catch (error: any) {
         log('error', `Bot error: ${error.message}`);
+        await notifyError(`Dispatch failed: ${error.message}`);
         await updateWorkerStatus({
             bot: { status: 'error', sentToday: 0 },
         });
