@@ -259,16 +259,17 @@ export function MonitorClient() {
     setLoading("start");
     setError(null);
     try {
-      // Call worker API to start test dispatch
+      // Call worker API to resume dispatch for current time window
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-      const response = await fetch(`${workerUrl}/trigger/test-dispatch`, {
+      const response = await fetch(`${workerUrl}/trigger/dispatch-current`, {
         method: 'POST',
       });
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Failed to start');
       }
-      console.log('Worker dispatch started');
+      const data = await response.json();
+      console.log(`Dispatch started for ${data.window} window`);
     } catch (err: any) {
       console.error("Failed to start bot:", err);
       setError(err.message || "Failed to start");

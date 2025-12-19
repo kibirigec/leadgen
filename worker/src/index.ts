@@ -94,6 +94,31 @@ app.post('/trigger/dispatch/:window', async (req, res) => {
     }
 });
 
+// Resume dispatch for current time window (auto-detect)
+app.post('/trigger/dispatch-current', async (req, res) => {
+    // Determine current window based on EAT time (UTC+3)
+    const now = new Date();
+    const eatHour = (now.getUTCHours() + 3) % 24;
+
+    let window: 'morning' | 'lunch' | 'evening';
+    if (eatHour >= 5 && eatHour < 12) {
+        window = 'morning';
+    } else if (eatHour >= 12 && eatHour < 17) {
+        window = 'lunch';
+    } else {
+        window = 'evening';
+    }
+
+    addLog('info', `▶️ Resume dispatch for ${window} window (auto-detected, ${eatHour}:00 EAT)`);
+    try {
+        const result = await runDispatch(window, addLog);
+        res.json({ success: true, window, result });
+    } catch (error: any) {
+        addLog('error', `Dispatch failed: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // ============================================
 // TEST ENDPOINTS (Small batches for testing)
 // ============================================
