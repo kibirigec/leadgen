@@ -136,15 +136,38 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
 ];
 
 /**
+ * Format business name to Title Case if all caps
+ * "HARK DENTAL CLINIC" -> "Hark Dental Clinic"
+ * "Dr. Smith's Clinic" -> "Dr. Smith's Clinic" (unchanged)
+ */
+function formatBusinessName(name: string): string {
+    // Check if name is mostly uppercase (80%+ uppercase letters)
+    const letters = name.replace(/[^a-zA-Z]/g, '');
+    const uppercaseCount = (name.match(/[A-Z]/g) || []).length;
+
+    if (letters.length > 0 && uppercaseCount / letters.length > 0.8) {
+        // Convert to Title Case
+        return name
+            .toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+
+    return name;
+}
+
+/**
  * Get a message for a business type
  * Rotates between variants based on current day
  */
 export function getMessage(businessName: string, businessType: string): string {
+    const formattedName = formatBusinessName(businessName);
     const template = MESSAGE_TEMPLATES.find(t => t.businessType === businessType);
 
     if (!template) {
         // Fallback generic message
-        return `Hi, I came across ${businessName} on Google Maps. I help businesses set up automatic replies so customers can reach them at any time.\n\nWould you be open to a quick 1-minute demo?`;
+        return `Hi, I came across ${formattedName} on Google Maps. I help businesses set up automatic replies so customers can reach them at any time.\n\nWould you be open to a quick 1-minute demo?`;
     }
 
     // Rotate based on day of year
@@ -152,5 +175,5 @@ export function getMessage(businessName: string, businessType: string): string {
     const variantIndex = dayOfYear % template.variants.length;
     const message = template.variants[variantIndex];
 
-    return message.replace(/{name}/g, businessName);
+    return message.replace(/{name}/g, formattedName);
 }
