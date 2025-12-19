@@ -29,7 +29,7 @@ export async function runDispatch(
         .where('dispatchDate', '==', today)
         .where('status', '==', 'pending')
         .orderBy('priority', 'desc')
-        .limit(limit || defaultLimit)
+        .limit((limit || defaultLimit) * 2) // Fetch extra to account for duplicates
         .get();
 
     if (snapshot.empty) {
@@ -37,12 +37,23 @@ export async function runDispatch(
         return { success: true, sentCount: 0 };
     }
 
-    const leads = snapshot.docs.map(doc => ({
+    // Deduplicate by phone number
+    const seenPhones = new Set<string>();
+    const allLeads = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data() as any,
     }));
 
-    log('info', `Found ${leads.length} leads to process`);
+    const leads = allLeads.filter(lead => {
+        const phone = lead.phone?.replace(/\D/g, '');
+        if (!phone || seenPhones.has(phone)) {
+            return false;
+        }
+        seenPhones.add(phone);
+        return true;
+    }).slice(0, limit || defaultLimit);
+
+    log('info', `Found ${allLeads.length} raw, ${leads.length} unique leads to process`);
 
     // Send start notification
     await notifyDispatchStart(window, leads.length);
