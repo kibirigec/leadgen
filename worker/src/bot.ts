@@ -151,7 +151,7 @@ export async function runWhatsAppBot(
                     errorCount,
                 });
 
-                const message = getMessage(lead.name, lead.businessType || 'business', lead.city || 'your area');
+                const message = getMessage(lead.name, lead.businessType || 'business');
 
                 // TEST MODE: Use test phone instead of actual lead phone
                 const url = `https://web.whatsapp.com/send?phone=${TEST_PHONE}&text=${encodeURIComponent(message)}`;
