@@ -109,7 +109,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
 
                         const run = await apifyClient.actor('compass/crawler-google-places').call({
                             searchStringsArray: [searchQuery],
-                            maxCrawledPlacesPerSearch: businessType.dailyQuota * 2,
+                            maxCrawledPlacesPerSearch: businessType.dailyQuota * 6, // 3x buffer for 300 leads/day
                             language: 'en',
                             maxImages: 0,
                         });

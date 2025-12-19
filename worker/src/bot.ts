@@ -24,8 +24,25 @@ interface Lead {
     city?: string;
 }
 
-// TEST MODE: All messages go to this number
-const TEST_PHONE = "256775910888";
+// Phone number validation
+function isValidPhone(phone: string): boolean {
+    // Remove all non-digit characters
+    const cleaned = phone.replace(/\D/g, '');
+    // Valid if 10-15 digits (international format)
+    return cleaned.length >= 10 && cleaned.length <= 15;
+}
+
+// Normalize phone number for WhatsApp
+function normalizePhone(phone: string): string {
+    let cleaned = phone.replace(/\D/g, '');
+    // Add Uganda country code if missing
+    if (cleaned.startsWith('0')) {
+        cleaned = '256' + cleaned.substring(1);
+    } else if (!cleaned.startsWith('256') && cleaned.length === 9) {
+        cleaned = '256' + cleaned;
+    }
+    return cleaned;
+}
 
 // Update bot status in Firestore (for /monitor dashboard)
 async function updateBotStatus(data: {
@@ -69,11 +86,10 @@ export async function runWhatsAppBot(
 
     log('info', `Starting bot with ${leads.length} leads`);
     log('info', `Session: ${sessionDir}`);
-    log('info', `TEST MODE: All messages going to ${TEST_PHONE}`);
 
     // Update dashboard status
     await updateBotStatus({ status: 'starting', totalLeads: leads.length, processedLeads: 0, errorCount: 0 });
-    await addBotLog('info', `Bot starting with ${leads.length} leads (TEST MODE)`);
+    await addBotLog('info', `Bot starting with ${leads.length} leads`);
 
     const browser = await puppeteer.launch({
         headless: true,
@@ -153,8 +169,15 @@ export async function runWhatsAppBot(
 
                 const message = getMessage(lead.name, lead.businessType || 'business');
 
-                // TEST MODE: Use test phone instead of actual lead phone
-                const url = `https://web.whatsapp.com/send?phone=${TEST_PHONE}&text=${encodeURIComponent(message)}`;
+                // Validate and normalize phone number
+                if (!isValidPhone(lead.phone)) {
+                    log('warning', `  ⚠️ Invalid phone: ${lead.phone} - skipping`);
+                    await addBotLog('warning', `Invalid phone number: ${lead.phone}`, lead.name);
+                    continue; // Skip to next lead
+                }
+
+                const phoneNumber = normalizePhone(lead.phone);
+                const url = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
 
                 await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
@@ -179,9 +202,19 @@ export async function runWhatsAppBot(
                 }
 
                 if (!found) {
-                    const screenshotPath = `/tmp/debug_${TEST_PHONE}_${i}.png`;
+                    // Check if it's an invalid number error
+                    const pageContent = await page.content();
+                    if (pageContent.includes('Phone number shared via url is invalid') ||
+                        pageContent.includes('invalid') ||
+                        pageContent.includes('not on WhatsApp')) {
+                        log('warning', `  ⚠️ ${lead.name}: Not on WhatsApp - skipping`);
+                        await addBotLog('warning', `Not on WhatsApp`, lead.name);
+                        continue; // Skip to next lead
+                    }
+
+                    const screenshotPath = `/tmp/debug_${lead.id}_${i}.png`;
                     await page.screenshot({ path: screenshotPath, fullPage: true });
-                    log('warning', `  Could not find input box - screenshot saved to ${screenshotPath}`);
+                    log('warning', `  Could not find input box - screenshot saved`);
                     await addBotLog('warning', `Could not find input box`, lead.name);
                     errorCount++;
                     continue;
@@ -196,8 +229,8 @@ export async function runWhatsAppBot(
 
                 sentCount++;
                 contactedLeadIds.push(lead.id);
-                log('info', `✅ Sent to ${lead.name} (test: ${TEST_PHONE})`);
-                await addBotLog('info', `Message sent successfully (test mode)`, lead.name);
+                log('info', `✅ Sent to ${lead.name} (${phoneNumber})`);
+                await addBotLog('info', `Message sent successfully`, lead.name);
 
                 // Human-like delay (30-60 seconds)
                 const delay = 30000 + Math.floor(Math.random() * 30000);

@@ -135,27 +135,7 @@ app.post('/trigger/test-telegram', async (req, res) => {
 // CRON JOBS (EAT = UTC+3)
 // ============================================
 
-// TEST CRON: 3:35 AM EAT = 0:35 AM UTC - Full scrape
-cron.schedule('35 0 * * *', async () => {
-    addLog('info', '🧪 TEST CRON: Full scrape triggered (3:35 AM EAT)');
-    try {
-        await runScrape(addLog); // No limit - full scrape
-    } catch (error: any) {
-        addLog('error', `Test scrape failed: ${error.message}`);
-    }
-}, { timezone: 'UTC' });
-
-// TEST CRON: 3:45 AM EAT = 0:45 AM UTC - Morning dispatch (30 messages)
-cron.schedule('45 0 * * *', async () => {
-    addLog('info', '🧪 TEST CRON: Morning dispatch triggered (3:45 AM EAT)');
-    try {
-        await runDispatch('morning', addLog); // Full 30 messages
-    } catch (error: any) {
-        addLog('error', `Test dispatch failed: ${error.message}`);
-    }
-}, { timezone: 'UTC' });
-
-// 5:00 AM EAT = 2:00 AM UTC
+// 5:00 AM EAT = 2:00 AM UTC - Daily scrape (300 leads)
 cron.schedule('0 2 * * *', async () => {
     addLog('info', '⏰ Scrape cron triggered (5:00 AM EAT)');
     try {
