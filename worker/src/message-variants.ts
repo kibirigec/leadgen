@@ -141,16 +141,19 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
  * "Dr. Smith's Clinic" -> "Dr. Smith's Clinic" (unchanged)
  */
 function formatBusinessName(name: string): string {
-    // Check if name is mostly uppercase (80%+ uppercase letters)
     const letters = name.replace(/[^a-zA-Z]/g, '');
     const uppercaseCount = (name.match(/[A-Z]/g) || []).length;
 
     if (letters.length > 0 && uppercaseCount / letters.length > 0.8) {
-        // Convert to Title Case
         return name
             .toLowerCase()
             .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .map(word =>
+                word
+                    .split('-')
+                    .map(sub => sub.charAt(0).toUpperCase() + sub.slice(1))
+                    .join('-')
+            )
             .join(' ');
     }
 
