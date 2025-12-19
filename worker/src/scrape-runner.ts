@@ -50,6 +50,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
 
     let totalQueued = 0;
     let totalReserve = 0;
+    const allScrapedLeads: Array<{ name: string; phone: string }> = [];
     const apifyClient = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 
     // Process each time window
@@ -195,6 +196,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
                 createdAt: new Date().toISOString(),
             });
             totalQueued++;
+            allScrapedLeads.push({ name: lead.name, phone: lead.phone });
         }
 
         log('info', `  ✅ ${window}: ${leadsForQueue.length} queued`);
@@ -221,8 +223,8 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
     log('info', `   📊 Queued: ${totalQueued} leads`);
     log('info', `   📦 Reserve: ${totalReserve} leads stored`);
 
-    // Send completion notification
-    await notifyScrapeEnd(totalQueued, totalReserve);
+    // Send completion notification with leads list
+    await notifyScrapeEnd(totalQueued, totalReserve, allScrapedLeads);
 
     return { success: true, totalScraped: totalQueued };
 }
