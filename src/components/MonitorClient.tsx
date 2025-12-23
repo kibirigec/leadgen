@@ -5,7 +5,7 @@ import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, startBotAction } from "@/actions/bot";
 import { getSavedLeadsAction } from "@/actions/leads";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2 } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 
 interface BotStatus {
@@ -54,7 +54,7 @@ export function MonitorClient() {
   const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
 
   // Modal state
-  const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | null>(null);
+  const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | 'reserve' | null>(null);
   const [detailedLeads, setDetailedLeads] = useState<any[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
 
@@ -76,7 +76,7 @@ export function MonitorClient() {
     return 'evening';
   };
 
-  const fetchDetailedLeads = async (type: 'contacted' | 'pending') => {
+  const fetchDetailedLeads = async (type: 'contacted' | 'pending' | 'reserve') => {
     setModalLoading(true);
     setSelectedView(type);
     setDetailedLeads([]);
@@ -91,6 +91,12 @@ export function MonitorClient() {
         q = query(
           collection(clientDb, "leads_queue"),
           where("status", "==", "sent"),
+          limit(50)
+        );
+      } else if (type === 'reserve') {
+        // Show reserve pool leads
+        q = query(
+          collection(clientDb, "reserve_pool"),
           limit(50)
         );
       } else {
@@ -469,10 +475,16 @@ export function MonitorClient() {
       {selectedView && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-slate-900 w-full max-w-lg rounded-2xl max-h-[80vh] flex flex-col border border-slate-700">
+            {/* Header */}
             <div className="p-4 border-b border-slate-800 flex justify-between items-center">
               <h3 className="font-bold flex items-center gap-2">
-                {selectedView === 'contacted' ? <CheckCircle className="text-green-400 w-5 h-5"/> : <AlertCircle className="text-yellow-400 w-5 h-5"/>}
-                {selectedView === 'contacted' ? 'All Contacted Leads' : 'Pending (Current Window)'}
+                {selectedView === 'contacted' && <CheckCircle className="text-green-400 w-5 h-5"/>}
+                {selectedView === 'pending' && <AlertCircle className="text-yellow-400 w-5 h-5"/>}
+                {selectedView === 'reserve' && <Package className="text-purple-400 w-5 h-5"/>}
+                
+                {selectedView === 'contacted' && 'All Contacted Leads'}
+                {selectedView === 'pending' && 'Pending (Current Window)'}
+                {selectedView === 'reserve' && 'Reserve Pool Leads'}
               </h3>
               <button onClick={() => setSelectedView(null)} className="p-2 hover:bg-white/10 rounded-full">
                 <X className="w-5 h-5" />
@@ -534,7 +546,11 @@ export function MonitorClient() {
         <h3 className="text-sm text-slate-400 mb-3">📦 Reserve Pool</h3>
         <div className="grid grid-cols-4 gap-2 text-center">
           {(['morning', 'lunch', 'evening', 'total'] as const).map((key) => (
-            <div key={key} className="bg-slate-700/50 rounded-lg p-2">
+            <div 
+              key={key} 
+              className={`bg-slate-700/50 rounded-lg p-2 ${key === 'total' ? 'cursor-pointer hover:bg-slate-700 transition-colors ring-1 ring-purple-500/50' : ''}`}
+              onClick={() => key === 'total' && fetchDetailedLeads('reserve')}
+            >
               <p className="text-lg font-bold text-purple-400">
                 {key === 'total' ? reservePool.total : reservePool[key]}
               </p>
