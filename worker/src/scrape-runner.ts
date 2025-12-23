@@ -234,7 +234,7 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
     log('info', `   📦 Reserve: ${totalReserve} leads stored`);
 
     // Send completion notification with leads list
-    await notifyScrapeEnd(totalQueued, totalReserve, allScrapedLeads);
+    await notifyScrapeEnd(todaysCity, totalQueued, totalReserve, allScrapedLeads);
 
     return { success: true, totalScraped: totalQueued };
 }

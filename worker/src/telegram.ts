@@ -48,19 +48,20 @@ export async function notifyScrapeStart(): Promise<void> {
 }
 
 export async function notifyScrapeEnd(
+    city: string,
     queued: number,
     reserve: number,
     leads?: Array<{ name: string; phone: string }>
 ): Promise<void> {
-    let message = `✅ <b>Scrape Complete</b>\n\n` +
+    let message = `✅ <b>Scrape Complete for ${city}</b>\n\n` +
         `📊 Queued: <b>${queued}</b> leads\n` +
         `📦 Reserve: <b>${reserve}</b> leads`;
 
     // Add leads list (limit to first 20 to avoid message too long)
     if (leads && leads.length > 0) {
         const displayLeads = leads.slice(0, 20);
-        message += `\n\n<b>Leads:</b>\n`;
-        message += displayLeads.map((l, i) => `${i + 1}. ${l.name} - ${l.phone}`).join('\n');
+        message += `\n\n<b>📍 Scraped Leads:</b>\n`;
+        message += displayLeads.map((l, i) => `${i + 1}. <b>${l.name}</b>\n    📞 ${l.phone}`).join('\n');
         if (leads.length > 20) {
             message += `\n... and ${leads.length - 20} more`;
         }
