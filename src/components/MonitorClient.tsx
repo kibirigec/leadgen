@@ -87,21 +87,20 @@ export function MonitorClient() {
       
       let q;
       if (type === 'contacted') {
-        // Show all contacted today
+        // Show ALL contacted (total)
         q = query(
           collection(clientDb, "leads_queue"),
-          where("dispatchDate", "==", today),
           where("status", "==", "sent"),
           orderBy("priority", "desc"),
           limit(50)
         );
       } else {
-        // Show pending for current window
+        // Show pending for current window (keep date filter)
         q = query(
           collection(clientDb, "leads_queue"),
           where("dispatchDate", "==", today),
-          where("status", "==", "pending"),
           where("timeWindow", "==", currentWindow),
+          where("status", "==", "pending"),
           orderBy("priority", "desc"),
           limit(50)
         );
@@ -474,7 +473,7 @@ export function MonitorClient() {
             <div className="p-4 border-b border-slate-800 flex justify-between items-center">
               <h3 className="font-bold flex items-center gap-2">
                 {selectedView === 'contacted' ? <CheckCircle className="text-green-400 w-5 h-5"/> : <AlertCircle className="text-yellow-400 w-5 h-5"/>}
-                {selectedView === 'contacted' ? 'Contacted Today' : 'Pending (Current Window)'}
+                {selectedView === 'contacted' ? 'All Contacted Leads' : 'Pending (Current Window)'}
               </h3>
               <button onClick={() => setSelectedView(null)} className="p-2 hover:bg-white/10 rounded-full">
                 <X className="w-5 h-5" />
