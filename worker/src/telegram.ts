@@ -6,7 +6,7 @@
  */
 
 // Telegram Bot credentials
-const BOT_TOKEN = '7771910683:AAEWw99GdXPj6U6L3Woh94QqFazddsANXiA';
+const BOT_TOKEN = '7771910683:AAH5tV9iaonAb8NHMJ3q0uiL-_Yfsx1hfP4';
 const CHAT_ID = '6985991145';
 
 /**
