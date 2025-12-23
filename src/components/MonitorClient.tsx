@@ -91,7 +91,6 @@ export function MonitorClient() {
         q = query(
           collection(clientDb, "leads_queue"),
           where("status", "==", "sent"),
-          orderBy("dispatchDate", "desc"),
           limit(50)
         );
       } else {
