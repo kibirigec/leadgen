@@ -6,8 +6,9 @@
  */
 
 // Telegram Bot credentials
-const BOT_TOKEN = '7771910683:AAH5tV9iaonAb8NHMJ3q0uiL-_Yfsx1hfP4';
-const CHAT_ID = '6985991145';
+// Telegram Bot credentials
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 
 /**
  * Send a message via Telegram
