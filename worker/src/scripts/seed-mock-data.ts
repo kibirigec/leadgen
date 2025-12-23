@@ -1,8 +1,9 @@
-import { getDb } from '../firebase';
+import { getDb, initializeFirebase } from '../firebase';
 import { getTodaysCity, getSuburbsForCity } from '../location-rotation';
 import { KEYWORD_MATRIX, getTodaysKeyword } from '../keyword-matrix';
 
 async function seedMockData() {
+    initializeFirebase(); // Fix: Initialize before getting DB
     console.log('🌱 Seeding mock data...');
     const db = getDb();
 
