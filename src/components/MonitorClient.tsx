@@ -5,7 +5,7 @@ import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, startBotAction } from "@/actions/bot";
 import { getSavedLeadsAction } from "@/actions/leads";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2 } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 
 interface BotStatus {
@@ -53,6 +53,11 @@ export function MonitorClient() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
 
+  // Modal state
+  const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | null>(null);
+  const [detailedLeads, setDetailedLeads] = useState<any[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
+
   // Helper: action with timeout
   const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
     return Promise.race([
@@ -69,6 +74,47 @@ export function MonitorClient() {
     if (hour >= 6 && hour < 12) return 'morning';
     if (hour >= 12 && hour < 18) return 'lunch';
     return 'evening';
+  };
+
+  const fetchDetailedLeads = async (type: 'contacted' | 'pending') => {
+    setModalLoading(true);
+    setSelectedView(type);
+    setDetailedLeads([]);
+    
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const currentWindow = getCurrentWindow();
+      
+      let q;
+      if (type === 'contacted') {
+        // Show all contacted today
+        q = query(
+          collection(clientDb, "leads_queue"),
+          where("dispatchDate", "==", today),
+          where("status", "==", "sent"),
+          orderBy("priority", "desc"),
+          limit(50)
+        );
+      } else {
+        // Show pending for current window
+        q = query(
+          collection(clientDb, "leads_queue"),
+          where("dispatchDate", "==", today),
+          where("status", "==", "pending"),
+          where("timeWindow", "==", currentWindow),
+          orderBy("priority", "desc"),
+          limit(50)
+        );
+      }
+      
+      const snap = await getDocs(q);
+      const leads = snap.docs.map(d => d.data());
+      setDetailedLeads(leads);
+    } catch (err) {
+      console.error("Error fetching details:", err);
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   // Fetch lead stats from leads_queue collection
@@ -368,6 +414,14 @@ export function MonitorClient() {
 
   const isRunning = ["running", "starting", "waiting_for_scan", "paused"].includes(status.status);
 
+  if (loading === 'initial') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900 text-slate-400">
+        <Loader2 className="w-8 h-8 animate-spin mb-4" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-white p-4 max-w-lg mx-auto">
       {/* Error Toast */}
@@ -378,46 +432,80 @@ export function MonitorClient() {
         </div>
       )}
 
-      {/* Connection Error Banner */}
-      {connectionError && (
-        <div className="bg-red-900/50 border border-red-600 text-red-200 px-4 py-2 rounded-xl mb-4 flex items-center gap-2">
-          <WifiOff className="w-4 h-4" />
-          <span className="text-sm">{connectionError}</span>
-        </div>
-      )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          🤖 Bot Monitor
-        </h1>
-        <div className="flex items-center gap-2">
-          {isConnected ? (
-            <Wifi className="w-5 h-5 text-green-400" />
-          ) : (
-            <WifiOff className="w-5 h-5 text-red-400" />
-          )}
-        </div>
-      </div>
 
-      {/* Lead Stats Cards */}
+  return (
+    <div className="max-w-md mx-auto p-4 pb-24 text-white">
+      {/* ... previous content ... */}
+
+      {/* Lead Stats Cards (Updated to be clickable) */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="bg-slate-800 rounded-xl p-4 text-center">
           <Users className="w-5 h-5 mx-auto mb-1 text-slate-400" />
           <p className="text-2xl font-bold">{leadStats.total}</p>
           <p className="text-xs text-slate-400">Total Leads</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 text-center">
+        
+        <button 
+          onClick={() => fetchDetailedLeads('contacted')}
+          className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition"
+        >
           <CheckCircle className="w-5 h-5 mx-auto mb-1 text-green-400" />
           <p className="text-2xl font-bold text-green-400">{leadStats.contacted}</p>
-          <p className="text-xs text-slate-400">Contacted</p>
-        </div>
-        <div className="bg-slate-800 rounded-xl p-4 text-center">
+          <p className="text-xs text-slate-400">Contacted (Tap)</p>
+        </button>
+        
+        <button 
+          onClick={() => fetchDetailedLeads('pending')}
+          className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition"
+        >
           <AlertCircle className="w-5 h-5 mx-auto mb-1 text-yellow-400" />
           <p className="text-2xl font-bold text-yellow-400">{leadStats.pending}</p>
-          <p className="text-xs text-slate-400">Pending (Current)</p>
-        </div>
+          <p className="text-xs text-slate-400">Pending (Tap)</p>
+        </button>
       </div>
+
+      {/* ... rest of existing UI ... */}
+
+      {/* Leads Modal */}
+      {selectedView && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-slate-900 w-full max-w-lg rounded-2xl max-h-[80vh] flex flex-col border border-slate-700">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="font-bold flex items-center gap-2">
+                {selectedView === 'contacted' ? <CheckCircle className="text-green-400 w-5 h-5"/> : <AlertCircle className="text-yellow-400 w-5 h-5"/>}
+                {selectedView === 'contacted' ? 'Contacted Today' : 'Pending (Current Window)'}
+              </h3>
+              <button onClick={() => setSelectedView(null)} className="p-2 hover:bg-white/10 rounded-full">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto flex-1 space-y-3">
+              {modalLoading ? (
+                <div className="text-center py-8 text-slate-500">Loading leads...</div>
+              ) : detailedLeads.length > 0 ? (
+                detailedLeads.map((lead, i) => (
+                  <div key={i} className="bg-slate-800/50 p-3 rounded-lg flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-white">{lead.name}</p>
+                      <p className="text-xs text-slate-400">{lead.phone}</p>
+                      <p className="text-[10px] text-slate-500 uppercase">{lead.businessType}</p>
+                    </div>
+                    <div className="text-right">
+                      {selectedView === 'pending' && <div className="text-xs text-slate-500">#{lead.priority}</div>}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-slate-500">No leads found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
       {/* Window Breakdown */}
       <div className="bg-slate-800 rounded-2xl p-4 mb-6">
