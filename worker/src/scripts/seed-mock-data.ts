@@ -1,3 +1,9 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables from parent directory .env
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
+
 import { getDb, initializeFirebase } from '../firebase';
 import { getTodaysCity, getSuburbsForCity } from '../location-rotation';
 import { KEYWORD_MATRIX, getTodaysKeyword } from '../keyword-matrix';
