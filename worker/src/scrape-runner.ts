@@ -12,6 +12,7 @@
 
 import { getDb, updateWorkerStatus } from './firebase';
 import { ApifyClient } from 'apify-client';
+import { MockApifyClient } from './mock-apify';
 import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
 import { isPhoneUsed } from './deduplication';
 import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './telegram';
@@ -51,7 +52,16 @@ export async function runScrape(log: LogFn, limit?: number): Promise<{ success: 
     let totalQueued = 0;
     let totalReserve = 0;
     const allScrapedLeads: Array<{ name: string; phone: string }> = [];
-    const apifyClient = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let apifyClient: any;
+
+    if (process.env.USE_MOCK_APIFY === 'true') {
+        log('info', '🧪 Using MOCK Apify client (reading from Firestore)');
+        apifyClient = new MockApifyClient({ token: 'mock-token' });
+    } else {
+        apifyClient = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
+    }
 
     // Process each time window
     for (const windowName of ['morning', 'lunch', 'evening'] as const) {
