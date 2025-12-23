@@ -56,7 +56,7 @@ export async function runDispatch(
     log('info', `Found ${allLeads.length} raw, ${leads.length} unique leads to process`);
 
     // Send start notification
-    await notifyDispatchStart(window, leads.length);
+    await notifyDispatchStart(window, leads.length, leads);
 
     // Update worker status
     await updateWorkerStatus({

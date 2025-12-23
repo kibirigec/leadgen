@@ -70,13 +70,22 @@ export async function notifyScrapeEnd(
     await sendTelegram(message);
 }
 
-export async function notifyDispatchStart(window: string, count: number): Promise<void> {
+export async function notifyDispatchStart(
+    window: string,
+    count: number,
+    leads?: Array<{ name: string; phone: string }>
+): Promise<void> {
     const emoji = window === 'morning' ? '☀️' : window === 'lunch' ? '🌤️' : '🌙';
-    await sendTelegram(
-        `📤 <b>Dispatch Started</b>\n\n` +
+    let message = `📤 <b>Dispatch Started</b>\n\n` +
         `${emoji} ${window.charAt(0).toUpperCase() + window.slice(1)} window\n` +
-        `👥 <b>${count}</b> leads to contact`
-    );
+        `👥 <b>${count}</b> leads to contact`;
+
+    if (leads && leads.length > 0) {
+        message += `\n\n<b>🎯 Targeting:</b>\n`;
+        message += leads.map((l, i) => `${i + 1}. <b>${l.name}</b>\n    call: ${l.phone}`).join('\n');
+    }
+
+    await sendTelegram(message);
 }
 
 export async function notifyDispatchEnd(window: string, sent: number, total: number, errors: number): Promise<void> {
