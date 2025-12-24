@@ -15,6 +15,10 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+if (!firebaseConfig.apiKey) {
+    console.error("🔥 Firebase Client Initialization Error: Missing API Key. Check your .env file or Vercel/VPS environment variables.");
+}
+
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firestore for client-side realtime subscriptions
