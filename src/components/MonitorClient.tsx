@@ -54,6 +54,7 @@ export function MonitorClient() {
 
   // Modal state
   const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | 'reserve' | null>(null);
+  const [selectedWindow, setSelectedWindow] = useState<string | null>(null);
   const [detailedLeads, setDetailedLeads] = useState<any[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
 
@@ -75,9 +76,10 @@ export function MonitorClient() {
     return 'evening';
   };
 
-  const fetchDetailedLeads = async (type: 'contacted' | 'pending' | 'reserve') => {
+  const fetchDetailedLeads = async (type: 'contacted' | 'pending' | 'reserve', windowFilter?: string) => {
     setModalLoading(true);
     setSelectedView(type);
+    setSelectedWindow(windowFilter || null);
     setDetailedLeads([]);
     
     try {
@@ -86,12 +88,22 @@ export function MonitorClient() {
       
       let q;
       if (type === 'contacted') {
-        // Show ALL contacted (total)
-        q = query(
-          collection(clientDb, "leads_queue"),
-          where("status", "==", "sent"),
-          limit(50)
-        );
+        if (windowFilter) {
+          // Show contacted for specific window
+          q = query(
+            collection(clientDb, "leads_queue"),
+            where("status", "==", "sent"),
+            where("timeWindow", "==", windowFilter),
+            limit(50)
+          );
+        } else {
+          // Show ALL contacted (total)
+          q = query(
+            collection(clientDb, "leads_queue"),
+            where("status", "==", "sent"),
+            limit(50)
+          );
+        }
       } else if (type === 'reserve') {
         // Show reserve pool leads
         q = query(
@@ -99,10 +111,11 @@ export function MonitorClient() {
           limit(50)
         );
       } else {
-        // Show pending for current window (remove date/priority filters to match stats)
+        // Pending leads
+        const targetWindow = windowFilter || currentWindow;
         q = query(
           collection(clientDb, "leads_queue"),
-          where("timeWindow", "==", currentWindow),
+          where("timeWindow", "==", targetWindow),
           where("status", "==", "pending"),
           limit(50)
         );
@@ -479,11 +492,15 @@ export function MonitorClient() {
                 {selectedView === 'pending' && <AlertCircle className="text-yellow-400 w-5 h-5"/>}
                 {selectedView === 'reserve' && <Package className="text-purple-400 w-5 h-5"/>}
                 
-                {selectedView === 'contacted' && 'All Contacted Leads'}
-                {selectedView === 'pending' && 'Pending (Current Window)'}
+                {selectedView === 'contacted' && !selectedWindow && 'All Contacted Leads'}
+                {selectedView === 'contacted' && selectedWindow && `Contacted (${selectedWindow})`}
+                
+                {selectedView === 'pending' && !selectedWindow && 'Pending (Current Window)'}
+                {selectedView === 'pending' && selectedWindow && `Pending (${selectedWindow})`}
+                
                 {selectedView === 'reserve' && 'Reserve Pool Leads'}
               </h3>
-              <button onClick={() => setSelectedView(null)} className="p-2 hover:bg-white/10 rounded-full">
+              <button onClick={() => { setSelectedView(null); setSelectedWindow(null); }} className="p-2 hover:bg-white/10 rounded-full">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -530,8 +547,18 @@ export function MonitorClient() {
                 )}
               </span>
               <div className="flex gap-4">
-                <span className="text-yellow-400">{windowStats[win].pending} pending</span>
-                <span className="text-green-400">{windowStats[win].sent} sent</span>
+                <span 
+                  className="text-yellow-400 cursor-pointer hover:underline"
+                  onClick={() => fetchDetailedLeads('pending', win)}
+                >
+                  {windowStats[win].pending} pending
+                </span>
+                <span 
+                  className="text-green-400 cursor-pointer hover:underline"
+                  onClick={() => fetchDetailedLeads('contacted', win)}
+                >
+                  {windowStats[win].sent} sent
+                </span>
               </div>
             </div>
           ))}
