@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
-import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs } from "firebase/firestore";
+import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, startBotAction } from "@/actions/bot";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 
 interface BotStatus {
@@ -25,9 +25,10 @@ interface LogEntry {
 }
 
 interface LeadStats {
-  total: number;
-  contacted: number;
-  pending: number;
+  sentToday: number;
+  pendingToday: number;
+  totalContacted: number;
+  backlog: number;
 }
 
 interface WindowStats {
@@ -41,7 +42,7 @@ export function MonitorClient() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
-  const [leadStats, setLeadStats] = useState<LeadStats>({ total: 0, contacted: 0, pending: 0 });
+  const [leadStats, setLeadStats] = useState<LeadStats>({ sentToday: 0, pendingToday: 0, totalContacted: 0, backlog: 0 });
   const [windowStats, setWindowStats] = useState<WindowStats>({
     morning: { pending: 0, sent: 0 },
     lunch: { pending: 0, sent: 0 },
@@ -53,7 +54,7 @@ export function MonitorClient() {
   const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
 
   // Modal state
-  const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | 'reserve' | null>(null);
+  const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | 'reserve' | 'backlog' | null>(null);
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null);
   const [detailedLeads, setDetailedLeads] = useState<any[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
@@ -76,7 +77,7 @@ export function MonitorClient() {
     return 'evening';
   };
 
-  const fetchDetailedLeads = async (type: 'contacted' | 'pending' | 'reserve', windowFilter?: string) => {
+  const fetchDetailedLeads = async (type: 'contacted' | 'pending' | 'reserve' | 'backlog', windowFilter?: string) => {
     setModalLoading(true);
     setSelectedView(type);
     setSelectedWindow(windowFilter || null);
@@ -110,8 +111,17 @@ export function MonitorClient() {
           collection(clientDb, "reserve_pool"),
           limit(50)
         );
+      } else if (type === 'backlog') {
+        // Show backlog (pending from previous days)
+        q = query(
+          collection(clientDb, "leads_queue"),
+          where("status", "==", "pending"),
+          where("dispatchDate", "<", today),
+          orderBy("dispatchDate", "desc"),
+          limit(50)
+        );
       } else {
-        // Show pending for current window (ENFORCE DATE FILTER)
+        // Show pending for current window (TODAY ONLY)
         const targetWindow = windowFilter || currentWindow;
         q = query(
           collection(clientDb, "leads_queue"),
@@ -140,44 +150,60 @@ export function MonitorClient() {
       
       const today = new Date().toISOString().split('T')[0];
       
-      // Get leads for TODAY only (enforcing daily view)
-      const q = query(
+      // 1. Get Today's Stats (window breakdown)
+      const todayQuery = query(
         queueRef,
         where('dispatchDate', '==', today)
       );
       
-      const allSnap = await getDocs(q);
+      // 2. Get Total Contacted Ever (count)
+      const totalContactedQuery = query(
+        queueRef,
+        where('status', '==', 'sent')
+      );
       
-      // Count by status and window
-      let pendingInWindow = 0;
-      let sent = 0;
+      // 3. Get Backlog (Pending before today)
+      const backlogQuery = query(
+        queueRef,
+        where('status', '==', 'pending'),
+        where('dispatchDate', '<', today)
+      );
+
+      const [todaySnap, totalContactedSnap, backlogSnap] = await Promise.all([
+        getDocs(todayQuery),
+        getCountFromServer(totalContactedQuery),
+        getCountFromServer(backlogQuery)
+      ]);
+      
+      // Count Today's by status and window
+      let pendingToday = 0;
+      let sentToday = 0;
       const windows = {
         morning: { pending: 0, sent: 0 },
         lunch: { pending: 0, sent: 0 },
         evening: { pending: 0, sent: 0 },
       };
       
-      allSnap.forEach(doc => {
+      todaySnap.forEach(doc => {
         const data = doc.data();
         const win = data.timeWindow as 'morning' | 'lunch' | 'evening';
         
         if (data.status === 'sent') {
-          sent++;
+          sentToday++;
           if (win && windows[win]) windows[win].sent++;
         } else if (data.status === 'pending') {
+          pendingToday++;
           if (win && windows[win]) windows[win].pending++;
-          if (win === currentWindow) pendingInWindow++;
         }
       });
       
-      console.log(`Stats: total=${allSnap.size}, sent=${sent}, pending(${currentWindow})=${pendingInWindow}`);
-      console.log('Window breakdown:', windows);
-      
       setLeadStats({
-        total: allSnap.size,
-        contacted: sent,
-        pending: pendingInWindow
+        sentToday,
+        pendingToday,
+        totalContacted: totalContactedSnap.data().count,
+        backlog: backlogSnap.data().count
       });
+      setWindowStats(windows);
       setWindowStats(windows);
     } catch (err) {
       console.error("Error fetching lead stats:", err);
@@ -445,7 +471,7 @@ export function MonitorClient() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-slate-900 text-white p-4 max-w-lg mx-auto pb-24">
       {/* Error Toast */}
       {error && (
         <div className="fixed top-4 left-4 right-4 max-w-lg mx-auto bg-red-600 text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-lg z-50 animate-pulse">
@@ -454,36 +480,49 @@ export function MonitorClient() {
         </div>
       )}
 
-
-
-  return (
-    <div className="max-w-md mx-auto p-4 pb-24 text-white">
-      {/* ... previous content ... */}
-
-      {/* Lead Stats Cards (Updated to be clickable) */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="bg-slate-800 rounded-xl p-4 text-center">
-          <Users className="w-5 h-5 mx-auto mb-1 text-slate-400" />
-          <p className="text-2xl font-bold">{leadStats.total}</p>
-          <p className="text-xs text-slate-400">Total Leads</p>
-        </div>
-        
+      {/* Stats Grid - Row 1: History & Today's Wins */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        {/* Total Contacted Ever */}
         <button 
           onClick={() => fetchDetailedLeads('contacted')}
           className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition"
         >
-          <CheckCircle className="w-5 h-5 mx-auto mb-1 text-green-400" />
-          <p className="text-2xl font-bold text-green-400">{leadStats.contacted}</p>
-          <p className="text-xs text-slate-400">Contacted (Tap)</p>
+          <History className="w-5 h-5 mx-auto mb-1 text-blue-400" />
+          <p className="text-2xl font-bold text-blue-400">{leadStats.totalContacted}</p>
+          <p className="text-xs text-slate-400">Total Contacted</p>
         </button>
         
+        {/* Contacted Today */}
+        <div className="bg-slate-800 rounded-xl p-4 text-center">
+          <CheckCircle className="w-5 h-5 mx-auto mb-1 text-green-400" />
+          <p className="text-2xl font-bold text-green-400">{leadStats.sentToday}</p>
+          <p className="text-xs text-slate-400">Sent Today</p>
+        </div>
+      </div>
+
+      {/* Stats Grid - Row 2: Workload */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        {/* Backlog */}
+        <button 
+          onClick={() => fetchDetailedLeads('backlog')}
+          className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition relative overflow-hidden"
+        >
+          {leadStats.backlog > 0 && (
+             <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full m-2 animate-pulse" />
+          )}
+          <Calendar className="w-5 h-5 mx-auto mb-1 text-orange-400" />
+          <p className="text-2xl font-bold text-orange-400">{leadStats.backlog}</p>
+          <p className="text-xs text-slate-400">Backlog</p>
+        </button>
+
+        {/* Pending Today */}
         <button 
           onClick={() => fetchDetailedLeads('pending')}
           className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition"
         >
           <AlertCircle className="w-5 h-5 mx-auto mb-1 text-yellow-400" />
-          <p className="text-2xl font-bold text-yellow-400">{leadStats.pending}</p>
-          <p className="text-xs text-slate-400">Pending (Tap)</p>
+          <p className="text-2xl font-bold text-yellow-400">{leadStats.pendingToday}</p>
+          <p className="text-xs text-slate-400">Pending Today</p>
         </button>
       </div>
 
@@ -645,26 +684,26 @@ export function MonitorClient() {
           </div>
         )}
 
-        {status.totalLeads && status.totalLeads > 0 && (
+        {(status.totalLeads || 0) > 0 && (
           <div className="mb-4">
             <span className="text-sm text-slate-400">Progress</span>
             <div className="flex items-center gap-3 mt-1">
               <div className="flex-1 bg-slate-700 rounded-full h-3">
                 <div 
                   className="bg-emerald-500 h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${((status.processedLeads || 0) / status.totalLeads) * 100}%` }}
+                  style={{ width: `${((status.processedLeads || 0) / (status.totalLeads || 1)) * 100}%` }}
                 />
               </div>
               <span className="text-sm font-medium">
-                {status.processedLeads || 0}/{status.totalLeads}
+                {status.processedLeads || 0}/{status.totalLeads || 0}
               </span>
             </div>
           </div>
         )}
 
-        {status.errorCount !== undefined && status.errorCount > 0 && (
+        {(status.errorCount || 0) > 0 && (
           <div className="flex items-center gap-2 text-red-400">
-            <span className="text-sm">Errors: {status.errorCount}</span>
+            <span className="text-sm">Errors: {status.errorCount || 0}</span>
           </div>
         )}
       </div>
