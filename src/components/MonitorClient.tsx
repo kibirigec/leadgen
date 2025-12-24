@@ -150,58 +150,64 @@ export function MonitorClient() {
       
       const today = new Date().toISOString().split('T')[0];
       
-      // 1. Get Today's Stats (window breakdown)
-      const todayQuery = query(
+      // 1. Get ALL Pending (to calculate Today vs Backlog in memory)
+      // We do this because legacy leads might lack 'dispatchDate', causing Firestore filters to hide them.
+      const pendingQuery = query(
         queueRef,
-        where('dispatchDate', '==', today)
+        where('status', '==', 'pending')
       );
       
-      // 2. Get Total Contacted Ever (count)
-      const totalContactedQuery = query(
+      // 2. Get ALL Sent (to calculate Today vs History in memory)
+      const sentQuery = query(
         queueRef,
         where('status', '==', 'sent')
       );
-      
-      // 3. Get Backlog (Pending before today)
-      const backlogQuery = query(
-        queueRef,
-        where('status', '==', 'pending'),
-        where('dispatchDate', '<', today)
-      );
 
-      const [todaySnap, totalContactedSnap, backlogSnap] = await Promise.all([
-        getDocs(todayQuery),
-        getCountFromServer(totalContactedQuery),
-        getCountFromServer(backlogQuery)
+      const [pendingSnap, sentSnap] = await Promise.all([
+        getDocs(pendingQuery),
+        getDocs(sentQuery)
       ]);
       
       // Count Today's by status and window
       let pendingToday = 0;
       let sentToday = 0;
+      // Backlog = Total Pending - Pending Today
+      // Total Contacted = Total Sent
+      
       const windows = {
         morning: { pending: 0, sent: 0 },
         lunch: { pending: 0, sent: 0 },
         evening: { pending: 0, sent: 0 },
       };
       
-      todaySnap.forEach(doc => {
+      // Process Pending
+      pendingSnap.forEach(doc => {
         const data = doc.data();
         const win = data.timeWindow as 'morning' | 'lunch' | 'evening';
         
-        if (data.status === 'sent') {
-          sentToday++;
-          if (win && windows[win]) windows[win].sent++;
-        } else if (data.status === 'pending') {
+        if (data.dispatchDate === today) {
           pendingToday++;
           if (win && windows[win]) windows[win].pending++;
+        }
+        // Else it's backlog (counted implicitly by subtraction or explicitly)
+      });
+
+      // Process Sent
+      sentSnap.forEach(doc => {
+        const data = doc.data();
+        const win = data.timeWindow as 'morning' | 'lunch' | 'evening';
+        
+        if (data.dispatchDate === today) {
+          sentToday++;
+          if (win && windows[win]) windows[win].sent++;
         }
       });
       
       setLeadStats({
         sentToday,
         pendingToday,
-        totalContacted: totalContactedSnap.data().count,
-        backlog: backlogSnap.data().count
+        totalContacted: sentSnap.size,
+        backlog: pendingSnap.size - pendingToday
       });
       setWindowStats(windows);
       setWindowStats(windows);
