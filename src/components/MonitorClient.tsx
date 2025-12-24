@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, startBotAction } from "@/actions/bot";
-import { getSavedLeadsAction } from "@/actions/leads";
 import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 
