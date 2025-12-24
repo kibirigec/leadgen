@@ -112,14 +112,15 @@ export function MonitorClient() {
           limit(50)
         );
       } else if (type === 'backlog') {
-        // Show backlog (pending from previous days)
+        // Show backlog (pending from previous days OR missing date)
+        // Note: We avoid filtering by date in Firestore because it hides docs with missing/null dates.
         q = query(
           collection(clientDb, "leads_queue"),
           where("status", "==", "pending"),
-          where("dispatchDate", "<", today),
-          orderBy("dispatchDate", "desc"),
-          limit(50)
+          limit(300) // Increase limit to potentially catch mixed backlog + today
         );
+        
+        // We'll filter client-side below
       } else {
         // Show pending for current window (TODAY ONLY)
         const targetWindow = windowFilter || currentWindow;
@@ -133,7 +134,14 @@ export function MonitorClient() {
       }
       
       const snap = await getDocs(q);
-      const leads = snap.docs.map(d => d.data());
+      let leads = snap.docs.map(d => d.data());
+      
+      if (type === 'backlog') {
+        // Client-side filter: Remove leads scheduled for today
+        // This keeps leads with missing dates or past dates
+        leads = leads.filter(l => l.dispatchDate !== today).slice(0, 50);
+      }
+      
       setDetailedLeads(leads);
     } catch (err) {
       console.error("Error fetching details:", err);
