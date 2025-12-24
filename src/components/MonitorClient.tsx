@@ -111,10 +111,11 @@ export function MonitorClient() {
           limit(50)
         );
       } else {
-        // Pending leads
+        // Show pending for current window (ENFORCE DATE FILTER)
         const targetWindow = windowFilter || currentWindow;
         q = query(
           collection(clientDb, "leads_queue"),
+          where("dispatchDate", "==", today),
           where("timeWindow", "==", targetWindow),
           where("status", "==", "pending"),
           limit(50)
@@ -137,8 +138,15 @@ export function MonitorClient() {
       const queueRef = collection(clientDb, 'leads_queue');
       const currentWindow = getCurrentWindow();
       
-      // Get ALL leads
-      const allSnap = await getDocs(queueRef);
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get leads for TODAY only (enforcing daily view)
+      const q = query(
+        queueRef,
+        where('dispatchDate', '==', today)
+      );
+      
+      const allSnap = await getDocs(q);
       
       // Count by status and window
       let pendingInWindow = 0;
