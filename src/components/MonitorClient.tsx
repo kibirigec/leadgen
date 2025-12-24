@@ -575,8 +575,7 @@ export function MonitorClient() {
           </div>
         </div>
       )}
-    </div>
-  );
+
 
       {/* Window Breakdown */}
       <div className="bg-slate-800 rounded-2xl p-4 mb-6">
