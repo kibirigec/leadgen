@@ -99,13 +99,11 @@ export function MonitorClient() {
           limit(50)
         );
       } else {
-        // Show pending for current window (keep date filter)
+        // Show pending for current window (remove date/priority filters to match stats)
         q = query(
           collection(clientDb, "leads_queue"),
-          where("dispatchDate", "==", today),
           where("timeWindow", "==", currentWindow),
           where("status", "==", "pending"),
-          orderBy("priority", "desc"),
           limit(50)
         );
       }
