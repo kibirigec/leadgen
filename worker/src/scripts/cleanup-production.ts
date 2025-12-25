@@ -13,77 +13,46 @@ async function cleanupProduction() {
     const db = getDb();
     const batchSize = 400;
 
-    console.log('🧹 Starting PRODUCTION Cleanup (Preserving Contacted Data)...');
+    console.log('🧹 Starting COMPREHENSIVE PRODUCTION Cleanup...');
+    console.log('⚠️  PRESERVING: outreach_history (Deduplication) and leads_queue (History)');
 
     // 1. Clean leads_queue (Keep 'sent', delete 'pending')
     console.log('Checking leads_queue for pending leads...');
     const queueRef = db.collection('leads_queue');
-    const pendingSnap = await queueRef.where('status', '!=', 'sent').get();
+    const pendingSnap = await queueRef.where('status', '!=', 'sent').limit(batchSize).get();
 
+    // We loop this because 'where' queries can't easily be passed to the generic deleteCollection
+    let deletedCount = 0;
     if (!pendingSnap.empty) {
-        console.log(`Found ${pendingSnap.size} pending leads to delete.`);
-        const batches = [];
-        let batch = db.batch();
-        let counter = 0;
+        // Simple loop for now since we expect ~100 pending at most, but let's be safe
+        // Logic: delete batch, if more exist, run again.
+        // Actually, let's just use the manual batch logic for this specific query
 
-        pendingSnap.docs.forEach((doc) => {
-            batch.delete(doc.ref);
-            counter++;
-            if (counter % batchSize === 0) {
-                batches.push(batch.commit());
-                batch = db.batch();
+        let hasMore = true;
+        while (hasMore) {
+            const snap = await queueRef.where('status', '!=', 'sent').limit(batchSize).get();
+            if (snap.empty) {
+                hasMore = false;
+                break;
             }
-        });
-        batches.push(batch.commit());
-        await Promise.all(batches);
-        console.log('✅ queue cleared (pending only).');
-    } else {
-        console.log('✅ queue already clean.');
+            const batch = db.batch();
+            snap.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            deletedCount += snap.size;
+            console.log(`   Deleted ${snap.size} pending leads...`);
+        }
     }
+    console.log(`✅ leads_queue cleared (${deletedCount} pending deleted).`);
 
-    // 2. Clean reserve_pool (Delete ALL)
-    console.log('Cleaning reserve_pool...');
-    const reserveRef = db.collection('reserve_pool');
-    const reserveSnap = await reserveRef.limit(1000).get();
-    if (!reserveSnap.empty) {
-        const batches = [];
-        let batch = db.batch();
-        let counter = 0;
-        reserveSnap.docs.forEach((doc) => {
-            batch.delete(doc.ref);
-            counter++;
-            if (counter % batchSize === 0) {
-                batches.push(batch.commit());
-                batch = db.batch();
-            }
-        });
-        batches.push(batch.commit());
-        await Promise.all(batches);
-        console.log(`✅ reserve_pool cleared (${reserveSnap.size} deleted).`);
-    }
+    // 2. Clean Other Collections (Total Wipe)
+    await deleteCollection(db, 'reserve_pool', batchSize);
+    await deleteCollection(db, 'leads_raw', batchSize);
+    await deleteCollection(db, 'bot_logs', batchSize);
+    await deleteCollection(db, 'mock_apify_results', batchSize);
+    await deleteCollection(db, 'scrape_rotation', batchSize);
+    await deleteCollection(db, 'system', batchSize);
 
-    // 3. Clean leads_raw (Delete ALL - fresh start for scrape test)
-    console.log('Cleaning leads_raw...');
-    const rawRef = db.collection('leads_raw');
-    const rawSnap = await rawRef.limit(1000).get(); // Batch limited
-    if (!rawSnap.empty) {
-        const batches = [];
-        let batch = db.batch();
-        let counter = 0;
-        rawSnap.docs.forEach((doc) => {
-            batch.delete(doc.ref);
-            counter++;
-            if (counter % batchSize === 0) {
-                batches.push(batch.commit());
-                batch = db.batch();
-            }
-        });
-        batches.push(batch.commit());
-        await Promise.all(batches);
-        console.log(`✅ leads_raw cleared (${rawSnap.size} deleted).`);
-    }
-
-    // 4. Reset Worker Status
+    // 3. Reset Worker Status
     console.log('Resetting worker status...');
     await updateWorkerStatus({
         status: 'stopped',
@@ -93,8 +62,40 @@ async function cleanupProduction() {
         bot: { status: 'idle', sentToday: 0 }
     });
 
-    console.log('✨ Cleanup Complete. System ready for fresh scrape.');
+    console.log('✨ cleanup complete. Ready for launch.');
     process.exit(0);
+}
+
+// Helper to delete entire collection
+async function deleteCollection(db: admin.firestore.Firestore, collectionPath: string, batchSize: number) {
+    const collectionRef = db.collection(collectionPath);
+    const query = collectionRef.orderBy('__name__').limit(batchSize);
+
+    return new Promise((resolve, reject) => {
+        deleteQueryBatch(db, query, resolve).catch(reject);
+    });
+}
+
+async function deleteQueryBatch(db: admin.firestore.Firestore, query: admin.firestore.Query, resolve: any) {
+    const snapshot = await query.get();
+
+    const batchSize = snapshot.size;
+    if (batchSize === 0) {
+        resolve();
+        return;
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+    });
+    await batch.commit();
+
+    console.log(`   Deleted batch from collection...`);
+
+    process.nextTick(() => {
+        deleteQueryBatch(db, query, resolve);
+    });
 }
 
 cleanupProduction().catch(console.error);
