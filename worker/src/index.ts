@@ -170,6 +170,16 @@ cron.schedule('0 2 * * *', async () => {
     }
 }, { timezone: 'UTC' });
 
+// TEMPORARY TEST: 10:40 PM EAT = 19:40 UTC
+cron.schedule('40 19 * * *', async () => {
+    addLog('info', '⏰ TEST Scrape cron triggered (10:40 PM EAT)');
+    try {
+        await runScrape(addLog);
+    } catch (error: any) {
+        addLog('error', `Test scrape cron failed: ${error.message}`);
+    }
+}, { timezone: 'UTC' });
+
 // 6:30 AM EAT = 3:30 AM UTC
 cron.schedule('30 3 * * *', async () => {
     addLog('info', '⏰ Morning dispatch cron triggered (6:30 AM EAT)');
