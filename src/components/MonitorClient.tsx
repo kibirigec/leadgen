@@ -439,13 +439,13 @@ export function MonitorClient() {
 
   const getStatusColor = () => {
     switch (status.status) {
-      case "running": return "bg-green-500";
-      case "paused": return "bg-yellow-500";
-      case "error": return "bg-red-500";
-      case "stopped": return "bg-red-600";
-      case "starting": return "bg-blue-500";
-      case "waiting_for_scan": return "bg-purple-500";
-      default: return "bg-gray-500";
+      case "running": return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]";
+      case "paused": return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+      case "error": return "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+      case "stopped": return "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20";
+      case "starting": return "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+      case "waiting_for_scan": return "bg-purple-500/10 text-purple-400 border border-purple-500/20";
+      default: return "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20";
     }
   };
 
@@ -478,19 +478,19 @@ export function MonitorClient() {
 
   if (loading === 'initial') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900 text-slate-400">
+      <div className="flex items-center justify-center min-h-screen bg-zinc-950 text-zinc-500">
         <Loader2 className="w-8 h-8 animate-spin mb-4" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4 max-w-lg mx-auto pb-24">
+    <div className="min-h-screen bg-zinc-950 text-zinc-200 p-4 max-w-lg mx-auto pb-24 font-sans selection:bg-zinc-800">
       {/* Error Toast */}
       {error && (
-        <div className="fixed top-4 left-4 right-4 max-w-lg mx-auto bg-red-600 text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-lg z-50 animate-pulse">
+        <div className="fixed top-4 left-4 right-4 max-w-lg mx-auto bg-rose-500/10 border border-rose-500/20 backdrop-blur-md text-rose-400 px-4 py-3 rounded-xl flex items-center gap-2 shadow-2xl z-50 animate-in slide-in-from-top-2">
           <XCircle className="w-5 h-5 shrink-0" />
-          <span className="text-sm">{error}</span>
+          <span className="text-sm font-medium">{error}</span>
         </div>
       )}
 
@@ -499,18 +499,22 @@ export function MonitorClient() {
         {/* Total Contacted Ever */}
         <button 
           onClick={() => fetchDetailedLeads('contacted')}
-          className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition"
+          className="group bg-white/5 border border-white/5 rounded-2xl p-5 text-center hover:bg-white/10 hover:border-white/10 transition-all duration-300 backdrop-blur-sm"
         >
-          <History className="w-5 h-5 mx-auto mb-1 text-blue-400" />
-          <p className="text-2xl font-bold text-blue-400">{leadStats.totalContacted}</p>
-          <p className="text-xs text-slate-400">Total Contacted</p>
+          <div className="mb-2 bg-blue-500/10 w-10 h-10 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+            <History className="w-5 h-5 text-blue-400" />
+          </div>
+          <p className="text-3xl font-light text-zinc-100">{leadStats.totalContacted}</p>
+          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-1">Total Contacted</p>
         </button>
         
         {/* Contacted Today */}
-        <div className="bg-slate-800 rounded-xl p-4 text-center">
-          <CheckCircle className="w-5 h-5 mx-auto mb-1 text-green-400" />
-          <p className="text-2xl font-bold text-green-400">{leadStats.sentToday}</p>
-          <p className="text-xs text-slate-400">Sent Today</p>
+        <div className="bg-white/5 border border-white/5 rounded-2xl p-5 text-center backdrop-blur-sm">
+          <div className="mb-2 bg-emerald-500/10 w-10 h-10 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+          </div>
+          <p className="text-3xl font-light text-zinc-100">{leadStats.sentToday}</p>
+          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-1">Sent Today</p>
         </div>
       </div>
 
@@ -519,71 +523,91 @@ export function MonitorClient() {
         {/* Backlog */}
         <button 
           onClick={() => fetchDetailedLeads('backlog')}
-          className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition relative overflow-hidden"
+          className="group bg-white/5 border border-white/5 rounded-2xl p-5 text-center hover:bg-white/10 hover:border-white/10 transition-all duration-300 relative overflow-hidden backdrop-blur-sm"
         >
           {leadStats.backlog > 0 && (
-             <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full m-2 animate-pulse" />
+             <div className="absolute top-3 right-3 w-2 h-2 bg-rose-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(244,63,94,0.5)]" />
           )}
-          <Calendar className="w-5 h-5 mx-auto mb-1 text-orange-400" />
-          <p className="text-2xl font-bold text-orange-400">{leadStats.backlog}</p>
-          <p className="text-xs text-slate-400">Backlog</p>
+          <div className="mb-2 bg-orange-500/10 w-10 h-10 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+            <Calendar className="w-5 h-5 text-orange-400" />
+          </div>
+          <p className="text-3xl font-light text-zinc-100">{leadStats.backlog}</p>
+          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-1">Backlog</p>
         </button>
 
         {/* Pending Today */}
         <button 
           onClick={() => fetchDetailedLeads('pending')}
-          className="bg-slate-800 rounded-xl p-4 text-center hover:bg-slate-700 transition"
+          className="group bg-white/5 border border-white/5 rounded-2xl p-5 text-center hover:bg-white/10 hover:border-white/10 transition-all duration-300 backdrop-blur-sm"
         >
-          <AlertCircle className="w-5 h-5 mx-auto mb-1 text-yellow-400" />
-          <p className="text-2xl font-bold text-yellow-400">{leadStats.pendingToday}</p>
-          <p className="text-xs text-slate-400">Pending Today</p>
+           <div className="mb-2 bg-amber-500/10 w-10 h-10 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+            <AlertCircle className="w-5 h-5 text-amber-400" />
+          </div>
+          <p className="text-3xl font-light text-zinc-100">{leadStats.pendingToday}</p>
+          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-1">Pending Today</p>
         </button>
       </div>
 
-      {/* ... rest of existing UI ... */}
-
       {/* Leads Modal */}
       {selectedView && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-slate-900 w-full max-w-lg rounded-2xl max-h-[80vh] flex flex-col border border-slate-700">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-zinc-900/90 w-full max-w-lg rounded-3xl max-h-[80vh] flex flex-col border border-white/10 shadow-2xl">
             {/* Header */}
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-              <h3 className="font-bold flex items-center gap-2">
-                {selectedView === 'contacted' && <CheckCircle className="text-green-400 w-5 h-5"/>}
-                {selectedView === 'pending' && <AlertCircle className="text-yellow-400 w-5 h-5"/>}
-                {selectedView === 'reserve' && <Package className="text-purple-400 w-5 h-5"/>}
+            <div className="p-5 border-b border-white/5 flex justify-between items-center">
+              <h3 className="font-semibold text-zinc-200 flex items-center gap-3">
+                {selectedView === 'contacted' && <div className="bg-emerald-500/10 p-2 rounded-full"><CheckCircle className="text-emerald-400 w-5 h-5"/></div>}
+                {selectedView === 'pending' && <div className="bg-amber-500/10 p-2 rounded-full"><AlertCircle className="text-amber-400 w-5 h-5"/></div>}
+                {selectedView === 'reserve' && <div className="bg-purple-500/10 p-2 rounded-full"><Package className="text-purple-400 w-5 h-5"/></div>}
+                {selectedView === 'backlog' && <div className="bg-orange-500/10 p-2 rounded-full"><Calendar className="text-orange-400 w-5 h-5"/></div>}
                 
-                {selectedView === 'contacted' && !selectedWindow && 'All Contacted Leads'}
-                {selectedView === 'contacted' && selectedWindow && `Contacted (${selectedWindow})`}
-                
-                {selectedView === 'pending' && !selectedWindow && 'Pending (Current Window)'}
-                {selectedView === 'pending' && selectedWindow && `Pending (${selectedWindow})`}
-                
-                {selectedView === 'reserve' && 'Reserve Pool Leads'}
+                <span className="text-lg">
+                  {selectedView === 'contacted' && !selectedWindow && 'All Contacted Leads'}
+                  {selectedView === 'contacted' && selectedWindow && `Contacted (${selectedWindow})`}
+                  
+                  {selectedView === 'pending' && !selectedWindow && 'Pending Leads'}
+                  {selectedView === 'pending' && selectedWindow && `Pending (${selectedWindow})`}
+                  
+                  {selectedView === 'reserve' && 'Reserve Pool'}
+                  {selectedView === 'backlog' && 'Backlog Leads'}
+                </span>
               </h3>
-              <button onClick={() => { setSelectedView(null); setSelectedWindow(null); }} className="p-2 hover:bg-white/10 rounded-full">
+              <button onClick={() => { setSelectedView(null); setSelectedWindow(null); }} className="p-2 hover:bg-white/10 rounded-full transition-colors text-zinc-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <div className="p-4 overflow-y-auto flex-1 space-y-3">
+            <div className="p-4 overflow-y-auto flex-1 space-y-2">
               {modalLoading ? (
-                <div className="text-center py-8 text-slate-500">Loading leads...</div>
+                <div className="flex flex-col items-center justify-center py-12 text-zinc-500 gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <p className="text-sm">Loading data...</p>
+                </div>
               ) : detailedLeads.length > 0 ? (
                 detailedLeads.map((lead, i) => (
-                  <div key={i} className="bg-slate-800/50 p-3 rounded-lg flex justify-between items-center">
+                  <div key={i} className="group bg-white/5 border border-white/5 hover:bg-white/10 p-4 rounded-xl flex justify-between items-center transition-all">
                     <div>
-                      <p className="font-medium text-white">{lead.name}</p>
-                      <p className="text-xs text-slate-400">{lead.phone}</p>
-                      <p className="text-[10px] text-slate-500 uppercase">{lead.businessType}</p>
+                      <p className="font-medium text-zinc-200">{lead.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                         <span className="text-xs font-mono text-zinc-500 bg-black/20 px-1.5 py-0.5 rounded">{lead.phone}</span>
+                         <span className="text-[10px] text-zinc-500 uppercase tracking-wide border border-white/5 px-1.5 py-0.5 rounded-full">{lead.businessType}</span>
+                      </div>
                     </div>
                     <div className="text-right">
-                      {selectedView === 'pending' && <div className="text-xs text-slate-500">#{lead.priority}</div>}
+                      {selectedView === 'pending' && (
+                        <div className="text-xs text-zinc-600 font-mono">
+                           PR: <span className="text-zinc-400">{lead.priority}</span>
+                        </div>
+                      )}
+                      {lead.dispatchDate && (
+                         <div className="text-[10px] text-zinc-600 mt-1">{lead.dispatchDate}</div>
+                      )}
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-8 text-slate-500">No leads found.</div>
+                <div className="text-center py-12 text-zinc-600">
+                  No leads found in this view.
+                </div>
               )}
             </div>
           </div>
@@ -592,33 +616,39 @@ export function MonitorClient() {
 
 
       {/* Window Breakdown */}
-      <div className="bg-slate-800 rounded-2xl p-4 mb-6">
-        <h3 className="text-sm text-slate-400 mb-3">📊 Dispatch Windows</h3>
-        <div className="space-y-2">
+      <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Zap className="w-3 h-3" /> Dispatch Windows
+        </h3>
+        <div className="space-y-3">
           {(['morning', 'lunch', 'evening'] as const).map((win) => (
-            <div key={win} className="flex items-center justify-between text-sm">
-              <span className="capitalize flex items-center gap-2">
-                {win === 'morning' && '☀️'}
-                {win === 'lunch' && '🌤️'}
-                {win === 'evening' && '🌙'}
+            <div key={win} className="group flex items-center justify-between text-sm bg-black/20 p-3 rounded-xl border border-transparent hover:border-white/5 transition-all">
+              <span className="capitalize flex items-center gap-3 font-medium text-zinc-300">
+                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-lg bg-white/5 group-hover:scale-110 transition-transform duration-300`}>
+                  {win === 'morning' && '☀️'}
+                  {win === 'lunch' && '🌤️'}
+                  {win === 'evening' && '🌙'}
+                </span>
                 {win}
                 {getCurrentWindow() === win && (
-                  <span className="text-xs bg-emerald-600 px-1.5 py-0.5 rounded">NOW</span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold tracking-wide">NOW</span>
                 )}
               </span>
-              <div className="flex gap-4">
-                <span 
-                  className="text-yellow-400 cursor-pointer hover:underline"
+              <div className="flex gap-4 font-mono text-xs">
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors"
                   onClick={() => fetchDetailedLeads('pending', win)}
                 >
-                  {windowStats[win].pending} pending
-                </span>
-                <span 
-                  className="text-green-400 cursor-pointer hover:underline"
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500/50" />
+                  <span className="text-zinc-400 group-hover:text-zinc-200">{windowStats[win].pending}</span>
+                </div>
+                <div 
+                  className="flex items-center gap-1.5 cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors"
                   onClick={() => fetchDetailedLeads('contacted', win)}
                 >
-                  {windowStats[win].sent} sent
-                </span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
+                  <span className="text-zinc-400 group-hover:text-zinc-200">{windowStats[win].sent}</span>
+                </div>
               </div>
             </div>
           ))}
@@ -626,35 +656,39 @@ export function MonitorClient() {
       </div>
 
       {/* Reserve Pool */}
-      <div className="bg-slate-800 rounded-2xl p-4 mb-6">
-        <h3 className="text-sm text-slate-400 mb-3">📦 Reserve Pool</h3>
-        <div className="grid grid-cols-4 gap-2 text-center">
+      <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Package className="w-3 h-3" /> Reserve Pool
+        </h3>
+        <div className="grid grid-cols-4 gap-3 text-center">
           {(['morning', 'lunch', 'evening', 'total'] as const).map((key) => (
             <div 
               key={key} 
-              className={`bg-slate-700/50 rounded-lg p-2 ${key === 'total' ? 'cursor-pointer hover:bg-slate-700 transition-colors ring-1 ring-purple-500/50' : ''}`}
+              className={`bg-black/20 border border-white/5 rounded-xl p-3 ${key === 'total' ? 'cursor-pointer hover:bg-purple-500/10 hover:border-purple-500/20 transition-all' : ''}`}
               onClick={() => key === 'total' && fetchDetailedLeads('reserve')}
             >
-              <p className="text-lg font-bold text-purple-400">
+              <p className={`text-xl font-light ${key === 'total' ? 'text-purple-400' : 'text-zinc-300'}`}>
                 {key === 'total' ? reservePool.total : reservePool[key]}
               </p>
-              <p className="text-xs text-slate-400 capitalize">{key}</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{key}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-slate-800 rounded-2xl p-4 mb-6">
-        <h3 className="text-sm text-slate-400 mb-3">⚡ Quick Actions</h3>
+      <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Zap className="w-3 h-3" /> Quick Actions
+        </h3>
         <div className="flex gap-3">
           <button
             onClick={handleToggleNotifications}
             disabled={loading === 'notifications'}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-medium text-sm transition-all border ${
               notificationsEnabled
-                ? 'bg-green-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                : 'bg-white/5 text-zinc-400 border-white/5 hover:bg-white/10 hover:text-zinc-200'
             }`}
           >
             {loading === 'notifications' ? (
@@ -664,150 +698,176 @@ export function MonitorClient() {
             ) : (
               <BellOff className="w-4 h-4" />
             )}
-            {notificationsEnabled ? 'Enabled' : 'Notify'}
+            {notificationsEnabled ? 'Active' : 'Enable API'}
           </button>
           <button
             onClick={handleTriggerScrape}
             disabled={loading === 'scrape'}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-blue-600 hover:bg-blue-500 transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-medium text-sm bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 hover:border-indigo-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading === 'scrape' ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
             ) : (
               <Zap className="w-4 h-4" />
             )}
-            Scrape
+            Scrape Now
           </button>
         </div>
       </div>
 
       {/* Status Card */}
-      <div className="bg-slate-800 rounded-2xl p-6 mb-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-sm text-slate-400 uppercase tracking-wide">Status</span>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor()}`}>
-            {getStatusIcon()} {status.status?.toUpperCase()}
+      <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 shadow-2xl backdrop-blur-md relative overflow-hidden">
+        {/* Glow effect */}
+        <div className={`absolute top-0 right-0 w-32 h-32 bg-${status.status === 'running' ? 'emerald' : 'zinc'}-500/10 blur-[50px] rounded-full -mr-10 -mt-10 pointer-events-none`} />
+
+        <div className="flex items-center justify-between mb-6 relative">
+          <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">System Status</span>
+          <span className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${getStatusColor()}`}>
+            <span className="relative flex h-2 w-2">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  status.status === 'running' ? 'bg-emerald-400' :
+                  status.status === 'paused' ? 'bg-amber-400' :
+                  status.status === 'error' ? 'bg-rose-400' : 'bg-zinc-400'
+              }`}></span>
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                  status.status === 'running' ? 'bg-emerald-400' :
+                  status.status === 'paused' ? 'bg-amber-400' :
+                  status.status === 'error' ? 'bg-rose-400' : 'bg-zinc-400'
+              }`}></span>
+            </span>
+            {status.status?.replace(/_/g, ' ')}
           </span>
         </div>
 
         {status.currentLead && (
-          <div className="mb-4">
-            <span className="text-sm text-slate-400">Current Lead</span>
-            <p className="text-lg font-medium truncate">{status.currentLead}</p>
+          <div className="mb-6 relative">
+            <span className="text-xs text-zinc-500 uppercase tracking-wide block mb-2">Processing Lead</span>
+            <div className="bg-black/30 rounded-xl p-3 border border-white/5">
+                <p className="text-lg font-medium text-zinc-200 truncate">{status.currentLead}</p>
+            </div>
           </div>
         )}
 
         {(status.totalLeads || 0) > 0 && (
-          <div className="mb-4">
-            <span className="text-sm text-slate-400">Progress</span>
-            <div className="flex items-center gap-3 mt-1">
-              <div className="flex-1 bg-slate-700 rounded-full h-3">
+          <div className="mb-6 relative">
+            <div className="flex justify-between text-xs text-zinc-500 mb-2 uppercase tracking-wide">
+                <span>Progress</span>
+                <span className="font-mono text-zinc-300">{status.processedLeads || 0} / {status.totalLeads || 0}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
                 <div 
-                  className="bg-emerald-500 h-3 rounded-full transition-all duration-300"
+                  className="bg-zinc-100 h-2 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(255,255,255,0.3)]"
                   style={{ width: `${((status.processedLeads || 0) / (status.totalLeads || 1)) * 100}%` }}
                 />
               </div>
-              <span className="text-sm font-medium">
-                {status.processedLeads || 0}/{status.totalLeads || 0}
-              </span>
             </div>
           </div>
         )}
 
         {(status.errorCount || 0) > 0 && (
-          <div className="flex items-center gap-2 text-red-400">
-            <span className="text-sm">Errors: {status.errorCount || 0}</span>
+          <div className="flex items-center gap-2 text-rose-400 bg-rose-500/5 px-3 py-2 rounded-lg border border-rose-500/10">
+            <AlertCircle className="w-4 h-4" />
+            <span className="text-xs font-medium">Errors: {status.errorCount || 0}</span>
           </div>
         )}
       </div>
 
       {/* Control Buttons */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        {/* Start Button - enabled when idle or stopped */}
+        {/* Start Button */}
         <button
           onClick={handleStart}
           disabled={loading !== null || status.status === 'running' || status.status === 'paused'}
-          className="flex flex-col items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 p-4 rounded-xl transition-colors"
+          className="group flex flex-col items-center gap-2 bg-zinc-100 hover:bg-white text-zinc-950 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all shadow-lg shadow-white/5 active:scale-95"
         >
-          <Rocket className="w-6 h-6" />
-          <span className="text-xs font-medium">Start</span>
+          <Rocket className="w-5 h-5 group-hover:-translate-y-1 transition-transform text-black" />
+          <span className="text-[10px] font-bold uppercase tracking-wide">Start</span>
         </button>
 
-        {/* Pause/Resume Button - only enabled when running or paused */}
+        {/* Pause/Resume Button */}
         {status.status === "paused" ? (
           <button
             onClick={handleResume}
             disabled={loading !== null}
-            className="flex flex-col items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 p-4 rounded-xl transition-colors"
+            className="group flex flex-col items-center gap-2 bg-white/5 hover:bg-white/10 text-blue-400 border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95"
           >
-            <Play className="w-6 h-6" />
-            <span className="text-xs font-medium">Resume</span>
+            <Play className="w-5 h-5" />
+            <span className="text-[10px] font-bold uppercase tracking-wide">Resume</span>
           </button>
         ) : (
           <button
             onClick={handlePause}
             disabled={loading !== null || status.status !== 'running'}
-            className="flex flex-col items-center gap-2 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 p-4 rounded-xl transition-colors"
+            className="group flex flex-col items-center gap-2 bg-white/5 hover:bg-white/10 text-amber-400 border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95"
           >
-            <Pause className="w-6 h-6" />
-            <span className="text-xs font-medium">Pause</span>
+            <Pause className="w-5 h-5" />
+            <span className="text-[10px] font-bold uppercase tracking-wide">Pause</span>
           </button>
         )}
 
-        {/* Stop Button - only enabled when running or paused */}
+        {/* Stop Button */}
         <button
           onClick={handleStop}
           disabled={loading !== null || (status.status !== 'running' && status.status !== 'paused')}
-          className="flex flex-col items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 p-4 rounded-xl transition-colors"
+          className="group flex flex-col items-center gap-2 bg-white/5 hover:bg-white/10 text-rose-400 border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95"
         >
-          <Square className="w-6 h-6" />
-          <span className="text-xs font-medium">Stop</span>
+          <Square className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-wide">Stop</span>
         </button>
 
         {/* Refresh Button */}
         <button
           onClick={() => { fetchLeadStats(); window.location.reload(); }}
-          className="flex flex-col items-center gap-2 bg-slate-700 hover:bg-slate-600 p-4 rounded-xl transition-colors"
+          className="group flex flex-col items-center gap-2 bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 p-4 rounded-2xl transition-all active:scale-95"
         >
-          <RefreshCw className="w-6 h-6" />
-          <span className="text-xs font-medium">Refresh</span>
+          <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+          <span className="text-[10px] font-bold uppercase tracking-wide">Refresh</span>
         </button>
       </div>
 
       {/* Live Logs */}
-      <div className="bg-slate-800 rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <h2 className="font-semibold flex items-center gap-2">
-            📋 Live Logs
-            <span className="text-xs bg-slate-700 px-2 py-0.5 rounded-full">{logs.length}</span>
+      <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-black/20">
+          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            Terminal Logs
+            <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-mono">{logs.length}</span>
           </h2>
           <button
             onClick={handleClearLogs}
             disabled={loading === "clear"}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="text-zinc-600 hover:text-rose-400 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="max-h-80 overflow-y-auto">
+        <div className="max-h-60 overflow-y-auto font-mono text-xs p-2 custom-scrollbar bg-black/10">
           {logs.length === 0 ? (
-            <p className="text-center text-slate-500 py-8">No logs yet</p>
+             <div className="flex flex-col items-center justify-center py-10 text-zinc-700 gap-2">
+                <div className="w-10 h-10 border border-zinc-800 rounded flex items-center justify-center">
+                    <span className="text-xl">_</span>
+                </div>
+                <p>System Idle</p>
+             </div>
           ) : (
-            <ul className="divide-y divide-slate-700">
+            <ul className="space-y-1">
               {logs.map((log) => (
-                <li key={log.id} className="px-4 py-3 hover:bg-slate-700/50">
-                  <div className="flex items-start gap-2">
-                    <span className="text-lg">{getLogIcon(log.type)}</span>
+                <li key={log.id} className="group px-3 py-2 hover:bg-white/5 rounded-lg transition-colors border border-transparent hover:border-white/5">
+                  <div className="flex item-start gap-3">
+                    <span className="opacity-50 mt-0.5 text-zinc-500 shrink-0 select-none">›</span>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${log.type === "error" ? "text-red-400" : log.type === "warning" ? "text-yellow-400" : "text-slate-200"}`}>
+                      <p className={`${
+                          log.type === "error" ? "text-rose-400" : 
+                          log.type === "warning" ? "text-amber-400" : "text-zinc-300"
+                      }`}>
                         {log.message}
                       </p>
                       {log.leadName && (
-                        <p className="text-xs text-slate-500 truncate">{log.leadName}</p>
+                        <p className="text-zinc-600 truncate mt-0.5">Target: {log.leadName}</p>
                       )}
                     </div>
-                    <span className="text-xs text-slate-500 whitespace-nowrap">
+                    <span className="text-[10px] text-zinc-700 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
                       {formatTime(log.timestamp)}
                     </span>
                   </div>
@@ -819,9 +879,10 @@ export function MonitorClient() {
       </div>
 
       {/* Footer */}
-      <p className="text-center text-slate-600 text-xs mt-6">
-        Last updated: {status.updatedAt ? formatTime(status.updatedAt) : "Never"}
-      </p>
+      <div className="mt-8 flex justify-center items-center gap-2 text-[10px] text-zinc-700 uppercase tracking-widest">
+         <span className="w-2 h-2 rounded-full bg-emerald-500/20"></span>
+         System Active • {status.updatedAt ? formatTime(status.updatedAt) : "Syncing..."}
+      </div>
     </div>
   );
 }
