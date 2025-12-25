@@ -170,9 +170,9 @@ cron.schedule('0 2 * * *', async () => {
     }
 }, { timezone: 'UTC' });
 
-// TEMPORARY TEST: 10:50 PM EAT = 19:50 UTC
-cron.schedule('50 19 * * *', async () => {
-    addLog('info', '⏰ TEST Scrape cron triggered (10:50 PM EAT)');
+// TEMPORARY TEST: 11:00 PM EAT = 20:00 UTC
+cron.schedule('0 20 * * *', async () => {
+    addLog('info', '⏰ TEST Scrape cron triggered (11:00 PM EAT)');
     try {
         await runScrape(addLog);
     } catch (error: any) {
