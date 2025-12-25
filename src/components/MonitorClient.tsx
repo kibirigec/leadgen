@@ -6,6 +6,7 @@ import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, get
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, startBotAction } from "@/actions/bot";
 import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
+import { getNextScrapeDetails } from "@/lib/client-rotation";
 
 interface BotStatus {
   status: string;
@@ -615,6 +616,80 @@ export function MonitorClient() {
       )}
 
 
+
+      {/* REPOSITIONED Status Card */}
+      <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 shadow-2xl backdrop-blur-md relative overflow-hidden">
+        {/* Glow effect */}
+        <div className={`absolute top-0 right-0 w-32 h-32 bg-${status.status === 'running' ? 'emerald' : 'zinc'}-500/10 blur-[50px] rounded-full -mr-10 -mt-10 pointer-events-none`} />
+
+        <div className="flex items-center justify-between mb-6 relative">
+          <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">System Status</span>
+          <span className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${getStatusColor()}`}>
+            <span className="relative flex h-2 w-2">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  status.status === 'running' ? 'bg-emerald-400' :
+                  status.status === 'paused' ? 'bg-amber-400' :
+                  status.status === 'error' ? 'bg-rose-400' : 'bg-zinc-400'
+              }`}></span>
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                  status.status === 'running' ? 'bg-emerald-400' :
+                  status.status === 'paused' ? 'bg-amber-400' :
+                  status.status === 'error' ? 'bg-rose-400' : 'bg-zinc-400'
+              }`}></span>
+            </span>
+            {status.status?.replace(/_/g, ' ')}
+          </span>
+        </div>
+        
+        {/* Next Scrape Info */}
+        <div className="mb-4 bg-black/20 rounded-xl p-4 border border-white/5 flex items-center justify-between">
+           <div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold mb-1">Next Scrape Target</p>
+              <div className="flex items-center gap-2">
+                 <span className="text-sm font-medium text-emerald-400">{getNextScrapeDetails().city}</span>
+                 <span className="text-zinc-600">•</span>
+                 <span className="text-xs text-zinc-400">{getNextScrapeDetails().date}</span>
+              </div>
+           </div>
+           <div className="bg-white/5 p-2 rounded-lg">
+              <RefreshCw className="w-4 h-4 text-zinc-500" />
+           </div>
+        </div>
+
+        {status.currentLead && (
+          <div className="mb-6 relative">
+            <span className="text-xs text-zinc-500 uppercase tracking-wide block mb-2">Processing Lead</span>
+            <div className="bg-black/30 rounded-xl p-3 border border-white/5">
+                <p className="text-lg font-medium text-zinc-200 truncate">{status.currentLead}</p>
+            </div>
+          </div>
+        )}
+
+        {(status.totalLeads || 0) > 0 && (
+          <div className="mb-6 relative">
+            <div className="flex justify-between text-xs text-zinc-500 mb-2 uppercase tracking-wide">
+                <span>Progress</span>
+                <span className="font-mono text-zinc-300">{status.processedLeads || 0} / {status.totalLeads || 0}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-zinc-100 h-2 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(255,255,255,0.3)]"
+                  style={{ width: `${((status.processedLeads || 0) / (status.totalLeads || 1)) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(status.errorCount || 0) > 0 && (
+          <div className="flex items-center gap-2 text-rose-400 bg-rose-500/5 px-3 py-2 rounded-lg border border-rose-500/10">
+            <AlertCircle className="w-4 h-4" />
+            <span className="text-xs font-medium">Errors: {status.errorCount || 0}</span>
+          </div>
+        )}
+      </div>
+
       {/* Window Breakdown */}
       <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -676,102 +751,11 @@ export function MonitorClient() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
-        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Zap className="w-3 h-3" /> Quick Actions
-        </h3>
-        <div className="flex gap-3">
-          <button
-            onClick={handleToggleNotifications}
-            disabled={loading === 'notifications'}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-medium text-sm transition-all border ${
-              notificationsEnabled
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                : 'bg-white/5 text-zinc-400 border-white/5 hover:bg-white/10 hover:text-zinc-200'
-            }`}
-          >
-            {loading === 'notifications' ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : notificationsEnabled ? (
-              <Bell className="w-4 h-4" />
-            ) : (
-              <BellOff className="w-4 h-4" />
-            )}
-            {notificationsEnabled ? 'Active' : 'Enable API'}
-          </button>
-          <button
-            onClick={handleTriggerScrape}
-            disabled={loading === 'scrape'}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-medium text-sm bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 hover:border-indigo-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading === 'scrape' ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Zap className="w-4 h-4" />
-            )}
-            Scrape Now
-          </button>
-        </div>
-      </div>
 
-      {/* Status Card */}
-      <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 shadow-2xl backdrop-blur-md relative overflow-hidden">
-        {/* Glow effect */}
-        <div className={`absolute top-0 right-0 w-32 h-32 bg-${status.status === 'running' ? 'emerald' : 'zinc'}-500/10 blur-[50px] rounded-full -mr-10 -mt-10 pointer-events-none`} />
 
-        <div className="flex items-center justify-between mb-6 relative">
-          <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">System Status</span>
-          <span className={`px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${getStatusColor()}`}>
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  status.status === 'running' ? 'bg-emerald-400' :
-                  status.status === 'paused' ? 'bg-amber-400' :
-                  status.status === 'error' ? 'bg-rose-400' : 'bg-zinc-400'
-              }`}></span>
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                  status.status === 'running' ? 'bg-emerald-400' :
-                  status.status === 'paused' ? 'bg-amber-400' :
-                  status.status === 'error' ? 'bg-rose-400' : 'bg-zinc-400'
-              }`}></span>
-            </span>
-            {status.status?.replace(/_/g, ' ')}
-          </span>
-        </div>
 
-        {status.currentLead && (
-          <div className="mb-6 relative">
-            <span className="text-xs text-zinc-500 uppercase tracking-wide block mb-2">Processing Lead</span>
-            <div className="bg-black/30 rounded-xl p-3 border border-white/5">
-                <p className="text-lg font-medium text-zinc-200 truncate">{status.currentLead}</p>
-            </div>
-          </div>
-        )}
 
-        {(status.totalLeads || 0) > 0 && (
-          <div className="mb-6 relative">
-            <div className="flex justify-between text-xs text-zinc-500 mb-2 uppercase tracking-wide">
-                <span>Progress</span>
-                <span className="font-mono text-zinc-300">{status.processedLeads || 0} / {status.totalLeads || 0}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
-                <div 
-                  className="bg-zinc-100 h-2 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(255,255,255,0.3)]"
-                  style={{ width: `${((status.processedLeads || 0) / (status.totalLeads || 1)) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
-        {(status.errorCount || 0) > 0 && (
-          <div className="flex items-center gap-2 text-rose-400 bg-rose-500/5 px-3 py-2 rounded-lg border border-rose-500/10">
-            <AlertCircle className="w-4 h-4" />
-            <span className="text-xs font-medium">Errors: {status.errorCount || 0}</span>
-          </div>
-        )}
-      </div>
 
       {/* Control Buttons */}
       <div className="grid grid-cols-4 gap-3 mb-6">
