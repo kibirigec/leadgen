@@ -195,7 +195,7 @@ export async function runWhatsAppBot(
                     try {
                         // Use client-side redirect for SPA navigation (avoids full page load timeout)
                         await page.evaluate((targetUrl) => {
-                            window.location.href = targetUrl;
+                            (window as any).location.href = targetUrl;
                         }, url);
 
                         // We still consider 'navigated' true here, but the real check is the selector wait below
