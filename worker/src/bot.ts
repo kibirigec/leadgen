@@ -103,6 +103,7 @@ export async function runWhatsAppBot(
 
     const browser = await puppeteer.launch({
         headless: true, // Headless for production
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, // Use env var for local fallback, default for VPS
         protocolTimeout: 480000, // 8 minutes - increased again for extreme load
         userDataDir: sessionDir,
         args: [
@@ -110,6 +111,8 @@ export async function runWhatsAppBot(
             '--disable-setuid-sandbox',
             '--disable-gpu',
             '--disable-dev-shm-usage',
+            '--disable-extensions', // Lightweight optimization
+            '--mute-audio', // Save resources
             // '--no-zygote', // Removed for stability
             // '--single-process', // Removed for stability
         ],
