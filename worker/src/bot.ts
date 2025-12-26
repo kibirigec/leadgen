@@ -127,8 +127,8 @@ export async function runWhatsAppBot(
         await addBotLog('info', 'Navigating to WhatsApp Web...');
 
         await page.goto('https://web.whatsapp.com', {
-            waitUntil: 'networkidle2',
-            timeout: 120000,
+            waitUntil: 'domcontentloaded', // Changed from networkidle2 to handle heavy sync
+            timeout: 300000, // 5 minutes initial load timeout
         });
 
         // Wait for login
