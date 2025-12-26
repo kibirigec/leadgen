@@ -238,10 +238,12 @@ export async function runWhatsAppBot(
                 ];
 
                 let found = false;
+                let foundSelector = '';
                 for (const selector of inputSelectors) {
                     try {
                         await page.waitForSelector(selector, { timeout: 45000 });
                         found = true;
+                        foundSelector = selector;
                         break;
                     } catch { }
                 }
@@ -262,8 +264,25 @@ export async function runWhatsAppBot(
                 }
 
                 // Send
-                await new Promise(r => setTimeout(r, 1000));
+                console.log(`[DEBUG] Found input, ensuring focus...`);
+                // Take debug screenshot BEFORE sending to verify text presence
+                await page.screenshot({ path: `/tmp/pre_send_${lead.id}_${i}.png` });
+
+                // Method 1: Focus and Press Enter
+                await page.click(foundSelector); // Explicit click to focus
+                await new Promise(r => setTimeout(r, 500));
                 await page.keyboard.press('Enter');
+
+                // Method 2: Click Send Button (Backup)
+                try {
+                    const sendButtonSelector = 'span[data-icon="send"], button[aria-label="Send"]';
+                    await page.waitForSelector(sendButtonSelector, { timeout: 2000 });
+                    await page.click(sendButtonSelector);
+                    console.log(`[DEBUG] Clicked Send button fallback`);
+                } catch (e) {
+                    console.log(`[DEBUG] Send button not found or Enter already worked`);
+                }
+
                 await new Promise(r => setTimeout(r, 2000));
 
                 sentCount++;
