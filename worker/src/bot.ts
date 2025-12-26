@@ -239,7 +239,7 @@ export async function runWhatsAppBot(
                 let found = false;
                 for (const selector of inputSelectors) {
                     try {
-                        await page.waitForSelector(selector, { timeout: 15000 });
+                        await page.waitForSelector(selector, { timeout: 45000 }); // Increased to 45s for slow UI
                         found = true;
                         log('info', `  Found input with: ${selector}`);
                         break;
@@ -251,11 +251,16 @@ export async function runWhatsAppBot(
                 if (!found) {
                     // Check if it's an invalid number error
                     const pageContent = await page.content();
-                    if (pageContent.includes('Phone number shared via url is invalid') ||
-                        pageContent.includes('invalid') ||
-                        pageContent.includes('not on WhatsApp')) {
+                    const isInvalidNumber = pageContent.includes('Phone number shared via url is invalid');
+                    const isNotOnWhatApp = pageContent.includes('phone number isn\'t on WhatsApp');
+
+                    if (isInvalidNumber || isNotOnWhatApp) {
                         log('warning', `  ⚠️ ${lead.name}: Not on WhatsApp - skipping`);
                         await addBotLog('warning', `Not on WhatsApp`, lead.name);
+
+                        // Capture screenshot to verify it's actually invalid
+                        const screenshotPath = `/tmp/invalid_${lead.id}_${i}.png`;
+                        await page.screenshot({ path: screenshotPath, fullPage: true });
                         continue; // Skip to next lead
                     }
 
