@@ -264,6 +264,22 @@ export async function runWhatsAppBot(
                         continue; // Skip to next lead
                     }
 
+                    // Check for stuck splash screen
+                    if (pageContent.includes('splashscreen')) {
+                        log('warning', `  ⚠️ Stuck on startup/splash screen - reloading page...`);
+                        await addBotLog('warning', `Stuck on splash screen, reloading`, lead.name);
+                        try {
+                            await page.reload({ waitUntil: 'domcontentloaded', timeout: 300000 });
+                            // Wait for login/init again
+                            await page.waitForSelector(loginSelector, { timeout: 60000 });
+                            // Retry this lead immediately by decrementing index (dirty but effective here)
+                            i--;
+                            continue;
+                        } catch (e: any) {
+                            log('error', `  ❌ Reload failed: ${e.message}`);
+                        }
+                    }
+
                     const screenshotPath = `/tmp/debug_${lead.id}_${i}.png`;
                     await page.screenshot({ path: screenshotPath, fullPage: true });
                     log('warning', `  Could not find input box - screenshot saved`);
