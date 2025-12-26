@@ -102,7 +102,7 @@ export async function runWhatsAppBot(
     await addBotLog('info', `Bot starting with ${leads.length} leads`);
 
     const browser = await puppeteer.launch({
-        headless: true, // Headless for production
+        headless: process.env.HEADLESS === 'false' ? false : true, // Configurable for Xvfb support
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, // Use env var for local fallback, default for VPS
         protocolTimeout: 480000, // 8 minutes - increased again for extreme load
         userDataDir: sessionDir,
