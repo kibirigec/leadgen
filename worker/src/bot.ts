@@ -107,6 +107,9 @@ export async function runWhatsAppBot(
     let errorCount = 0;
     const contactedLeadIds: string[] = [];
 
+    // Define selector here so it's available in loop
+    const loginSelector = '[data-testid="chat-list"], #side';
+
     // Helper to launch/restart browser
     const initBrowser = async () => {
         log('info', `[DEBUG] HEADLESS env var: '${process.env.HEADLESS}'`);
@@ -143,7 +146,6 @@ export async function runWhatsAppBot(
             timeout: 300000,
         });
 
-        const loginSelector = '[data-testid="chat-list"], #side';
         await page.waitForSelector(loginSelector, { timeout: 60000 });
         log('info', 'Logged in successfully');
 
@@ -231,6 +233,8 @@ export async function runWhatsAppBot(
 
                 // Find input
                 console.log(`[DEBUG] looking for input selectors...`);
+                // Re-verify loginSelector availability
+
                 const inputSelectors = [
                     '[data-testid="conversation-compose-box-input"]',
                     'div[contenteditable="true"][data-tab="10"]',
@@ -252,8 +256,19 @@ export async function runWhatsAppBot(
                 if (!found) {
                     // Check content for errors or splash
                     const pageContent = await page.content();
+
                     if (pageContent.includes('splashscreen')) {
-                        throw new Error('CRITICAL: Stuck on splash screen');
+                        log('warning', '⚠️ Splash screen detected. Waiting for auto-reload to finish...');
+                        // Graceful recovery: Wait for app to become ready again
+                        try {
+                            await page.waitForSelector(loginSelector, { timeout: 60000 });
+                            log('info', '✅ App recovered from splash screen. Retrying lead...');
+                            // Retry this lead by decrementing index
+                            i--;
+                            continue;
+                        } catch (e) {
+                            throw new Error('CRITICAL: Stuck on splash screen (Recovery failed)');
+                        }
                     }
                     if (pageContent.includes('phone number isn\'t on WhatsApp')) {
                         log('warning', `  ⚠️ Not on WhatsApp: ${lead.name}`);
