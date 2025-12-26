@@ -180,9 +180,9 @@ cron.schedule('15 20 * * *', async () => {
     }
 }, { timezone: 'UTC' });
 
-// CRITICAL TEST: 2:10 AM EAT = 23:10 UTC
-cron.schedule('10 23 * * *', async () => {
-    addLog('info', '⏰ TEST Dispatch cron triggered (2:10 AM EAT)');
+// CRITICAL TEST: 2:25 AM EAT = 23:25 UTC
+cron.schedule('25 23 * * *', async () => {
+    addLog('info', '⏰ TEST Dispatch cron triggered (2:25 AM EAT)');
     try {
         await runDispatch('morning', addLog);
     } catch (error: any) {
