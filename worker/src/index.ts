@@ -190,9 +190,9 @@ cron.schedule('30 3 * * *', async () => {
     }
 }, { timezone: 'UTC' });
 
-// 12:30 PM EAT = 9:30 AM UTC
-cron.schedule('30 9 * * *', async () => {
-    addLog('info', '⏰ Lunch dispatch cron triggered (12:30 PM EAT)');
+// 1:05 PM EAT = 10:05 AM UTC
+cron.schedule('5 10 * * *', async () => {
+    addLog('info', '⏰ Lunch dispatch cron triggered (1:05 PM EAT)');
     try {
         await runDispatch('lunch', addLog);
     } catch (error: any) {
