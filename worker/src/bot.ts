@@ -132,14 +132,9 @@ export async function runWhatsAppBot(
         page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 2 });
 
-        await page.setRequestInterception(true);
-        page.on('request', (replaceRequest: any) => {
-            if (['image', 'media', 'font'].includes(replaceRequest.resourceType())) {
-                replaceRequest.abort();
-            } else {
-                replaceRequest.continue();
-            }
-        });
+        // Disable request interception to ensure all UI assets load (Stability > Speed)
+        // await page.setRequestInterception(true);
+        // page.on('request', (replaceRequest: any) => { ... });
 
         log('info', 'Navigating to WhatsApp Web...');
         await page.goto('https://web.whatsapp.com', {
@@ -203,8 +198,8 @@ export async function runWhatsAppBot(
                             // @ts-ignore
                             document.body.removeChild(link);
                         }, url);
-                        navigated = true;
-                        await new Promise(r => setTimeout(r, 3000));
+                        // Wait for React to react (Increased for VPS)
+                        await new Promise(r => setTimeout(r, 12000));
                         break;
                     } catch (navError: any) {
                         if (attempt < 3) {
