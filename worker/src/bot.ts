@@ -183,14 +183,16 @@ export async function runWhatsAppBot(
                 let navigated = false;
                 for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
-                        await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+                        // Use domcontentloaded as it's faster and more reliable on VPS
+                        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
                         navigated = true;
                         break;
                     } catch (navError: any) {
                         if (attempt < 3) {
-                            log('warning', `  ⏳ Navigation attempt ${attempt}/3 failed, retrying in 10s...`);
+                            log('warning', `  ⏳ Navigation attempt ${attempt}/3 failed (${navError.message}), retrying in 10s...`);
                             await new Promise(r => setTimeout(r, 10000)); // Wait 10s before retry
                         } else {
+                            log('error', `  ❌ Navigation failed after 3 attempts: ${navError.message}`);
                             throw navError; // Let outer catch handle it
                         }
                     }
