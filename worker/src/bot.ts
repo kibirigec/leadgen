@@ -109,6 +109,7 @@ export async function runWhatsAppBot(
 
     // Helper to launch/restart browser
     const initBrowser = async () => {
+        log('info', `[DEBUG] HEADLESS env var: '${process.env.HEADLESS}'`);
         if (browser) {
             try { await browser.close(); } catch (e) { /* ignore */ }
         }
