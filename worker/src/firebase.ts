@@ -81,6 +81,11 @@ export async function updateWorkerStatus(update: Partial<WorkerStatus>): Promise
 
 // Get current bot status (for pause/stop checks)
 export async function getBotStatus(): Promise<string> {
-    const doc = await db.collection('system').doc('bot_status').get();
-    return doc.data()?.status || 'idle';
+    if (!db) return 'running'; // Mock status for local debugging
+    try {
+        const doc = await db.collection('system').doc('bot_status').get();
+        return doc.data()?.status || 'idle';
+    } catch {
+        return 'running';
+    }
 }

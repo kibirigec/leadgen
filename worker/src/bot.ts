@@ -59,7 +59,12 @@ async function updateBotStatus(data: {
             updatedAt: new Date().toISOString(),
         }, { merge: true });
     } catch (e) {
-        console.error('Failed to update bot status:', e);
+        // Fallback for local debugging (when Firebase isn't init)
+        if ((e as Error).message.includes('not initialized')) {
+            // console.log('[LOCAL DEBUG] Status Update:', data);
+        } else {
+            console.error('Failed to update bot status:', e);
+        }
     }
 }
 
@@ -74,7 +79,12 @@ async function addBotLog(type: 'info' | 'error' | 'warning', message: string, le
             timestamp: new Date().toISOString(),
         });
     } catch (e) {
-        console.error('Failed to add bot log:', e);
+        // Fallback for local debugging
+        if ((e as Error).message.includes('not initialized')) {
+            // console.log(`[LOCAL DEBUG] Log (${type}): ${message}`, leadName ? `[${leadName}]` : '');
+        } else {
+            console.error('Failed to add bot log:', e);
+        }
     }
 }
 
@@ -92,7 +102,7 @@ export async function runWhatsAppBot(
     await addBotLog('info', `Bot starting with ${leads.length} leads`);
 
     const browser = await puppeteer.launch({
-        headless: true,
+        headless: true, // Headless for production
         protocolTimeout: 480000, // 8 minutes - increased again for extreme load
         userDataDir: sessionDir,
         args: [
@@ -100,8 +110,8 @@ export async function runWhatsAppBot(
             '--disable-setuid-sandbox',
             '--disable-gpu',
             '--disable-dev-shm-usage',
-            '--no-zygote',
-            '--single-process',
+            // '--no-zygote', // Removed for stability
+            // '--single-process', // Removed for stability
         ],
     });
 
