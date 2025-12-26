@@ -138,6 +138,10 @@ export async function runWhatsAppBot(
         await addBotLog('info', 'Logged in to WhatsApp Web');
         await updateBotStatus({ status: 'running' });
 
+        // WARMUP: Wait for initial sync to settle (Critical for VPS)
+        log('info', '⏳ Waiting 60s for WhatsApp sync to settle...');
+        await new Promise(r => setTimeout(r, 60000));
+
         // Process each lead
         for (let i = 0; i < leads.length; i++) {
             const lead = leads[i];
@@ -190,19 +194,26 @@ export async function runWhatsAppBot(
                 const phoneNumber = normalizePhone(lead.phone);
                 const url = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
 
-                // Navigate with retry logic (up to 2 retries)
+                // Navigate using Link Injection (Lighter than goto)
                 let navigated = false;
                 for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
-                        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 300000 });
-                        navigated = true;
-                        break;
+                        // Use link injection to force client-side nav without page reload overhead
+                        await page.evaluate((targetUrl) => {
+                            // @ts-ignore
+                            const link = document.createElement('a');
+                            link.href = targetUrl;
+                            // @ts-ignore
+                            document.body.appendChild(link);
+                            link.click();
+                            // @ts-ignore
+                            document.body.removeChild(link);
+                        }, url);
 
-                        // We still consider 'navigated' true here, but the real check is the selector wait below
                         navigated = true;
 
-                        // Wait a moment for React router to pick it up
-                        await new Promise(r => setTimeout(r, 2000));
+                        // Wait for React to react
+                        await new Promise(r => setTimeout(r, 3000));
                         break;
                     } catch (navError: any) {
                         if (attempt < 3) {
