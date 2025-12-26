@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "tsx watch src/index.ts",
         "build": "tsc",
-        "start": "node dist/index.js",
+        "start": "HEADLESS=false xvfb-run --auto-servernum --server-args='-screen 0 1280x960x24' node dist/index.js",
         "seed:mock": "tsx src/scripts/seed-mock-data.ts"
     },
     "dependencies": {
