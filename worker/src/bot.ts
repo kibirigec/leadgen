@@ -178,16 +178,20 @@ export async function runWhatsAppBot(
                 });
 
                 const message = getMessage(lead.name, lead.businessType || 'business');
+                console.log(`[DEBUG] Phone check for: ${lead.phone}`);
                 if (!isValidPhone(lead.phone)) {
                     log('warning', `  ⚠️ Invalid phone: ${lead.phone} - skipping`);
+                    console.log(`[DEBUG] Skipped due to invalid phone`);
                     continue;
                 }
                 const phoneNumber = normalizePhone(lead.phone);
                 const url = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
+                console.log(`[DEBUG] Navigating to: ${url.substring(0, 50)}...`);
 
                 let navigated = false;
                 for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
+                        console.log(`[DEBUG] Nav attempt ${attempt}...`);
                         await page.evaluate((targetUrl: string) => {
                             // @ts-ignore
                             const link = document.createElement('a');
@@ -198,10 +202,14 @@ export async function runWhatsAppBot(
                             // @ts-ignore
                             document.body.removeChild(link);
                         }, url);
+
                         // Wait for React to react (Increased for VPS)
+                        console.log(`[DEBUG] Nav success, waiting 12s...`);
                         await new Promise(r => setTimeout(r, 12000));
+                        navigated = true;
                         break;
                     } catch (navError: any) {
+                        console.log(`[DEBUG] Nav error: ${navError.message}`);
                         if (attempt < 3) {
                             // Check for critical protocol errors
                             if (navError.message.includes('Protocol') || navError.message.includes('Session closed')) {
@@ -215,9 +223,13 @@ export async function runWhatsAppBot(
                     }
                 }
 
-                if (!navigated) continue;
+                if (!navigated) {
+                    console.log(`[DEBUG] Skipped: !navigated`);
+                    continue;
+                }
 
                 // Find input
+                console.log(`[DEBUG] looking for input selectors...`);
                 const inputSelectors = [
                     '[data-testid="conversation-compose-box-input"]',
                     'div[contenteditable="true"][data-tab="10"]',
