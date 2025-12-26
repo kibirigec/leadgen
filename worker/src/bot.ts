@@ -267,6 +267,8 @@ export async function runWhatsAppBot(
                     const screenshotPath = `/tmp/debug_${lead.id}_${i}.png`;
                     await page.screenshot({ path: screenshotPath, fullPage: true });
                     log('warning', `  Could not find input box - screenshot saved`);
+                    // DEBUG: Print html structure to see what's actually there
+                    log('warning', `  DEBUG HTML: ${pageContent.substring(0, 500)}...`);
                     await addBotLog('warning', `Could not find input box`, lead.name);
                     errorCount++;
                     continue;
