@@ -93,6 +93,7 @@ export async function runWhatsAppBot(
 
     const browser = await puppeteer.launch({
         headless: true,
+        protocolTimeout: 240000, // 4 minutes - crucial for slow VPS during heavy WS sync
         userDataDir: sessionDir,
         args: [
             '--no-sandbox',
