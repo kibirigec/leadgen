@@ -107,6 +107,16 @@ export async function runWhatsAppBot(
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 2 });
 
+    // Enable request interception to block images/fonts for performance
+    await page.setRequestInterception(true);
+    page.on('request', replaceRequest => {
+        if (['image', 'media', 'font'].includes(replaceRequest.resourceType())) {
+            replaceRequest.abort();
+        } else {
+            replaceRequest.continue();
+        }
+    });
+
     let sentCount = 0;
     let errorCount = 0;
     const contactedLeadIds: string[] = [];
@@ -183,17 +193,24 @@ export async function runWhatsAppBot(
                 let navigated = false;
                 for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
-                        // Use domcontentloaded as it's faster and more reliable on VPS
-                        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                        // Use client-side redirect for SPA navigation (avoids full page load timeout)
+                        await page.evaluate((targetUrl) => {
+                            window.location.href = targetUrl;
+                        }, url);
+
+                        // We still consider 'navigated' true here, but the real check is the selector wait below
                         navigated = true;
+
+                        // Wait a moment for React router to pick it up
+                        await new Promise(r => setTimeout(r, 2000));
                         break;
                     } catch (navError: any) {
                         if (attempt < 3) {
-                            log('warning', `  ⏳ Navigation attempt ${attempt}/3 failed (${navError.message}), retrying in 10s...`);
-                            await new Promise(r => setTimeout(r, 10000)); // Wait 10s before retry
+                            log('warning', `  ⏳ Navigation attempt ${attempt}/3 failed (${navError.message}), retrying in 5s...`);
+                            await new Promise(r => setTimeout(r, 5000));
                         } else {
                             log('error', `  ❌ Navigation failed after 3 attempts: ${navError.message}`);
-                            throw navError; // Let outer catch handle it
+                            throw navError;
                         }
                     }
                 }
