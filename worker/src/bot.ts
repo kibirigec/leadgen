@@ -203,9 +203,9 @@ export async function runWhatsAppBot(
                             document.body.removeChild(link);
                         }, url);
 
-                        // Wait for React to react (Increased for VPS)
-                        console.log(`[DEBUG] Nav success, waiting 12s...`);
-                        await new Promise(r => setTimeout(r, 12000));
+                        // Wait for React to react (Drastically increased for VPS load)
+                        console.log(`[DEBUG] Nav success, waiting 25s for UI render...`);
+                        await new Promise(r => setTimeout(r, 25000));
                         navigated = true;
                         break;
                     } catch (navError: any) {
