@@ -269,9 +269,17 @@ export async function runWhatsAppBot(
                     if (pageContent.includes('splashscreen')) {
                         splashLoopCount++;
                         if (splashLoopCount > 2) {
-                            log('error', `❌ Critical: Stuck in splash loop for ${lead.phone}. Skipping lead.`);
-                            // Proceed to next lead (do not i--)
-                            continue;
+                            log('error', `❌ Critical: Stuck in splash loop for ${lead.phone}. Restarting browser and skipping lead to save batch.`);
+
+                            // FORCE RESTART: Clear RAM so the next lead has a fresh start
+                            try { await browser?.close(); } catch { }
+                            await initBrowser();
+
+                            // Reset counters
+                            splashLoopCount = 0;
+                            lastLeadIndex = -1;
+
+                            continue; // Move to next lead
                         }
 
                         log('warning', '⚠️ Splash screen detected. Waiting for auto-reload to finish...');
