@@ -28,6 +28,10 @@ const PORT = process.env.WORKER_PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+// Dispatch lock - prevents concurrent dispatches
+let dispatchInProgress = false;
+let currentDispatchWindow: string | null = null;
+
 // In-memory logs (last 100)
 const logs: Array<{ timestamp: string; level: string; message: string }> = [];
 const addLog = (level: string, message: string) => {
@@ -84,18 +88,36 @@ app.post('/trigger/dispatch/:window', async (req, res) => {
         return res.status(400).json({ error: 'Invalid window' });
     }
 
+    // Check dispatch lock
+    if (dispatchInProgress) {
+        addLog('warning', `Dispatch rejected - already running for ${currentDispatchWindow}`);
+        return res.status(409).json({ error: `Dispatch already in progress for ${currentDispatchWindow}` });
+    }
+
     addLog('info', `Manual dispatch triggered for ${window}`);
+    dispatchInProgress = true;
+    currentDispatchWindow = window;
+
     try {
         const result = await runDispatch(window, addLog);
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Dispatch failed: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        dispatchInProgress = false;
+        currentDispatchWindow = null;
     }
 });
 
 // Resume dispatch for current time window (auto-detect)
 app.post('/trigger/dispatch-current', async (req, res) => {
+    // Check dispatch lock first
+    if (dispatchInProgress) {
+        addLog('warning', `Dispatch rejected - already running for ${currentDispatchWindow}`);
+        return res.status(409).json({ error: `Dispatch already in progress for ${currentDispatchWindow}` });
+    }
+
     // Determine current window based on EAT time (UTC+3)
     const now = new Date();
     const eatHour = (now.getUTCHours() + 3) % 24;
@@ -110,12 +132,18 @@ app.post('/trigger/dispatch-current', async (req, res) => {
     }
 
     addLog('info', `▶️ Resume dispatch for ${window} window (auto-detected, ${eatHour}:00 EAT)`);
+    dispatchInProgress = true;
+    currentDispatchWindow = window;
+
     try {
         const result = await runDispatch(window, addLog);
         res.json({ success: true, window, result });
     } catch (error: any) {
         addLog('error', `Dispatch failed: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        dispatchInProgress = false;
+        currentDispatchWindow = null;
     }
 });
 
@@ -170,47 +198,66 @@ cron.schedule('0 2 * * *', async () => {
     }
 }, { timezone: 'UTC' });
 
-// TEMPORARY TEST: 11:15 PM EAT = 20:15 UTC
-cron.schedule('15 20 * * *', async () => {
-    addLog('info', '⏰ TEST Scrape cron triggered (11:15 PM EAT)');
-    try {
-        await runScrape(addLog);
-    } catch (error: any) {
-        addLog('error', `Test scrape cron failed: ${error.message}`);
-    }
-}, { timezone: 'UTC' });
-
-
-
-
-
 // 6:30 AM EAT = 3:30 AM UTC
 cron.schedule('30 3 * * *', async () => {
     addLog('info', '⏰ Morning dispatch cron triggered (6:30 AM EAT)');
+
+    if (dispatchInProgress) {
+        addLog('warning', 'Morning dispatch skipped - another dispatch in progress');
+        return;
+    }
+
+    dispatchInProgress = true;
+    currentDispatchWindow = 'morning';
     try {
         await runDispatch('morning', addLog);
     } catch (error: any) {
         addLog('error', `Morning dispatch failed: ${error.message}`);
+    } finally {
+        dispatchInProgress = false;
+        currentDispatchWindow = null;
     }
 }, { timezone: 'UTC' });
 
-// 1:05 PM EAT = 10:05 AM UTC
-cron.schedule('5 10 * * *', async () => {
-    addLog('info', '⏰ Lunch dispatch cron triggered (1:05 PM EAT)');
+// 12:30 PM EAT = 9:30 AM UTC
+cron.schedule('30 9 * * *', async () => {
+    addLog('info', '⏰ Lunch dispatch cron triggered (12:30 PM EAT)');
+
+    if (dispatchInProgress) {
+        addLog('warning', 'Lunch dispatch skipped - another dispatch in progress');
+        return;
+    }
+
+    dispatchInProgress = true;
+    currentDispatchWindow = 'lunch';
     try {
         await runDispatch('lunch', addLog);
     } catch (error: any) {
         addLog('error', `Lunch dispatch failed: ${error.message}`);
+    } finally {
+        dispatchInProgress = false;
+        currentDispatchWindow = null;
     }
 }, { timezone: 'UTC' });
 
 // 7:30 PM EAT = 4:30 PM UTC
 cron.schedule('30 16 * * *', async () => {
     addLog('info', '⏰ Evening dispatch cron triggered (7:30 PM EAT)');
+
+    if (dispatchInProgress) {
+        addLog('warning', 'Evening dispatch skipped - another dispatch in progress');
+        return;
+    }
+
+    dispatchInProgress = true;
+    currentDispatchWindow = 'evening';
     try {
         await runDispatch('evening', addLog);
     } catch (error: any) {
         addLog('error', `Evening dispatch failed: ${error.message}`);
+    } finally {
+        dispatchInProgress = false;
+        currentDispatchWindow = null;
     }
 }, { timezone: 'UTC' });
 

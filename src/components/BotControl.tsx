@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { startBotAction, checkBotStatus } from "@/actions/bot";
+import { checkBotStatus } from "@/actions/bot";
 import { Business } from "@/lib/types";
 import { Bot, Loader2 } from "lucide-react";
 import Image from "next/image";
@@ -69,23 +69,25 @@ export function BotControl({ leads }: BotControlProps) {
     setLoading(true);
     setBotRunning(true);
     setQrCode(null);
-    setStatus("Chrome window opening... Scan QR code there!");
+    setStatus("Starting via worker...");
 
-    // Fire and forget - don't await completion to block UI updates
-    startBotAction(leads).then((result) => {
-        if (result.success) {
-            setStatus(`Bot finished! Sent ${result.count} messages.`);
+    try {
+        const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+        const response = await fetch(`${workerUrl}/trigger/dispatch-current`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            setStatus(`Dispatch started for ${data.window} window`);
         } else {
-            setStatus(`Bot failed: ${result.error}`);
+            setStatus(`Failed: ${data.error || 'Unknown error'}`);
+            setLoading(false);
+            setBotRunning(false);
         }
+    } catch (error: any) {
+        setStatus(`Network error: ${error.message}`);
         setLoading(false);
         setBotRunning(false);
-    }).catch((error) => {
-        setStatus("An error occurred while running the bot.");
-        console.error("Bot execution error:", error);
-        setLoading(false);
-        setBotRunning(false);
-    });
+    }
   };
 
   return (

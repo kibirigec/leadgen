@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { startBotAction, checkBotStatus } from "@/actions/bot";
+import { checkBotStatus } from "@/actions/bot";
 import { Business } from "@/lib/types";
 import { Bot, Loader2, Users, MessageCircle, LayoutDashboard, QrCode, Activity, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { StatsCard } from "@/components/StatsCard";
@@ -129,26 +129,25 @@ export function DashboardClient({ initialLeads }: DashboardClientProps) {
     setShowConfirm(false);
     setLoading(true);
     setBotRunning(true);
-    setQrCode(null);
-    setStatus("Bot is starting...");
+    setStatus("Starting via worker...");
 
-    startBotAction(leads).then((result) => {
-        if (result.success) {
-            setStatus(`Bot finished! Sent ${result.count} messages.`);
-            // Optimistically update leads? Or refresh?
-            // For now, we rely on page refresh or we could update local state if we returned the IDs.
-            // But let's keep it simple.
+    try {
+        const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+        const response = await fetch(`${workerUrl}/trigger/dispatch-current`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            setStatus(`Dispatch started for ${data.window} window`);
         } else {
-            setStatus(`Bot failed: ${result.error}`);
+            setStatus(`Failed: ${data.error || 'Unknown error'}`);
+            setLoading(false);
+            setBotRunning(false);
         }
+    } catch (error: any) {
+        setStatus(`Network error: ${error.message}`);
         setLoading(false);
         setBotRunning(false);
-    }).catch((error) => {
-        setStatus("An error occurred.");
-        console.error(error);
-        setLoading(false);
-        setBotRunning(false);
-    });
+    }
   };
 
   // Grouping logic (same as before)

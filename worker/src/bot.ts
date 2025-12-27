@@ -42,22 +42,18 @@ async function updateBotStatus(data: {
 }
 
 // Add log entry to Firestore (for /monitor dashboard)
+// Path matches frontend: system/bot_logs/entries
 async function addBotLog(type: 'info' | 'error' | 'warning', message: string, leadName?: string) {
     try {
         const db = getDb();
-        await db.collection('bot_logs').add({
+        await db.collection('system').doc('bot_logs').collection('entries').add({
             type,
             message,
             leadName: leadName || null,
             timestamp: new Date().toISOString(),
         });
     } catch (e) {
-        // Fallback for local debugging
-        if ((e as Error).message.includes('not initialized')) {
-            // console.log(`[LOCAL DEBUG] Log (${type}): ${message}`, leadName ? `[${leadName}]` : '');
-        } else {
-            console.error('Failed to add bot log:', e);
-        }
+        console.error('[BOT] Failed to add log:', e);
     }
 }
 
@@ -145,7 +141,30 @@ export async function runWhatsAppBot(
 
             if (currentStatus === 'stopped') {
                 log('info', '🛑 Bot stopped by user');
+                await addBotLog('warning', 'Bot stopped by user');
                 break;
+            }
+
+            // Handle PAUSE - wait until resumed or stopped
+            if (currentStatus === 'paused') {
+                log('info', '⏸️ Bot paused. Waiting to resume...');
+                await addBotLog('info', 'Bot paused by user');
+                let isPaused = true;
+                while (isPaused) {
+                    await new Promise(r => setTimeout(r, 2000)); // Check every 2 seconds
+                    const checkStatus = await getBotStatus();
+                    if (checkStatus === 'stopped') {
+                        log('info', '🛑 Bot stopped while paused');
+                        await addBotLog('warning', 'Bot stopped while paused');
+                        await browser?.close();
+                        return { success: true, sentCount, contactedLeadIds };
+                    }
+                    if (checkStatus !== 'paused') {
+                        log('info', '▶️ Bot resumed');
+                        await addBotLog('info', 'Bot resumed');
+                        isPaused = false;
+                    }
+                }
             }
 
             try {
@@ -154,7 +173,7 @@ export async function runWhatsAppBot(
                 await updateBotStatus({
                     status: 'running',
                     currentLead: lead.name,
-                    processedLeads: i,
+                    processedLeads: sentCount,
                     totalLeads: leads.length,
                     errorCount,
                 });

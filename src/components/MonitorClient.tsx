@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
-import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, startBotAction } from "@/actions/bot";
+import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs } from "@/actions/bot";
 import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
@@ -70,11 +70,12 @@ export function MonitorClient() {
     ]);
   };
 
-  // Get current dispatch window based on time
+  // Get current dispatch window based on EAT time (UTC+3)
   const getCurrentWindow = (): 'morning' | 'lunch' | 'evening' => {
-    const hour = new Date().getHours();
-    if (hour >= 6 && hour < 12) return 'morning';
-    if (hour >= 12 && hour < 18) return 'lunch';
+    const now = new Date();
+    const eatHour = (now.getUTCHours() + 3) % 24;
+    if (eatHour >= 5 && eatHour < 12) return 'morning';
+    if (eatHour >= 12 && eatHour < 17) return 'lunch';
     return 'evening';
   };
 
@@ -218,7 +219,6 @@ export function MonitorClient() {
         totalContacted: sentSnap.size,
         backlog: pendingSnap.size - pendingToday
       });
-      setWindowStats(windows);
       setWindowStats(windows);
     } catch (err) {
       console.error("Error fetching lead stats:", err);
@@ -802,7 +802,7 @@ export function MonitorClient() {
 
         {/* Refresh Button */}
         <button
-          onClick={() => { fetchLeadStats(); window.location.reload(); }}
+          onClick={() => { fetchLeadStats(); fetchReservePool(); }}
           className="group flex flex-col items-center gap-2 bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 p-4 rounded-2xl transition-all active:scale-95"
         >
           <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
@@ -862,11 +862,18 @@ export function MonitorClient() {
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer with connection indicator */}
       <div className="mt-8 flex justify-center items-center gap-2 text-[10px] text-zinc-700 uppercase tracking-widest">
-         <span className="w-2 h-2 rounded-full bg-emerald-500/20"></span>
-         System Active • {status.updatedAt ? formatTime(status.updatedAt) : "Syncing..."}
+         <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+         {isConnected ? 'Connected' : 'Disconnected'} • {status.updatedAt ? formatTime(status.updatedAt) : "Syncing..."}
       </div>
+      
+      {/* Connection error banner */}
+      {connectionError && (
+        <div className="fixed bottom-4 left-4 right-4 max-w-lg mx-auto bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-2 rounded-xl text-xs text-center">
+          {connectionError}
+        </div>
+      )}
     </div>
   );
 }
