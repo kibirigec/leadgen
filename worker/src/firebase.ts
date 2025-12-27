@@ -63,6 +63,7 @@ export interface WorkerStatus {
         morning?: string;
         lunch?: string;
         evening?: string;
+        backlog?: string;
     };
     bot?: {
         status: string;

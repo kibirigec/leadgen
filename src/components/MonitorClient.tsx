@@ -800,6 +800,30 @@ export function MonitorClient() {
           <span className="text-[10px] font-bold uppercase tracking-wide">Stop</span>
         </button>
 
+        {/* Dispatch Backlog Button */}
+        <button
+          onClick={async () => {
+            if (leadStats.backlog === 0) return;
+            setLoading('backlog');
+            try {
+              const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+              const response = await fetch(`${workerUrl}/trigger/dispatch-backlog`, { method: 'POST' });
+              const data = await response.json();
+              if (!response.ok) throw new Error(data.error || 'Failed');
+              setError(null);
+            } catch (err: any) {
+              setError(err.message);
+            } finally {
+              setTimeout(() => setLoading(null), 1000);
+            }
+          }}
+          disabled={loading !== null || leadStats.backlog === 0 || status.status === 'running'}
+          className="group flex flex-col items-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95"
+        >
+          <Package className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-wide">Backlog</span>
+        </button>
+
         {/* Refresh Button */}
         <button
           onClick={() => { fetchLeadStats(); fetchReservePool(); }}

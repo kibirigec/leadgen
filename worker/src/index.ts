@@ -19,7 +19,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 import { initializeFirebase, getWorkerStatus, updateWorkerStatus } from './firebase';
 import { runScrape } from './scrape-runner';
-import { runDispatch } from './dispatch-runner';
+import { runDispatch, runBacklogDispatch } from './dispatch-runner';
 
 const app = express();
 const PORT = process.env.WORKER_PORT || 4000;
@@ -140,6 +140,44 @@ app.post('/trigger/dispatch-current', async (req, res) => {
         res.json({ success: true, window, result });
     } catch (error: any) {
         addLog('error', `Dispatch failed: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        dispatchInProgress = false;
+        currentDispatchWindow = null;
+    }
+});
+
+// Dispatch ONLY backlog leads (skip fresh leads)
+app.post('/trigger/dispatch-backlog', async (req, res) => {
+    // Check dispatch lock first
+    if (dispatchInProgress) {
+        addLog('warning', `Backlog dispatch rejected - already running for ${currentDispatchWindow}`);
+        return res.status(409).json({ error: `Dispatch already in progress for ${currentDispatchWindow}` });
+    }
+
+    const limit = parseInt(req.query.limit as string) || 30;
+
+    // Determine current window based on EAT time (UTC+3)
+    const now = new Date();
+    const eatHour = (now.getUTCHours() + 3) % 24;
+    let window: 'morning' | 'lunch' | 'evening';
+    if (eatHour >= 5 && eatHour < 12) {
+        window = 'morning';
+    } else if (eatHour >= 12 && eatHour < 17) {
+        window = 'lunch';
+    } else {
+        window = 'evening';
+    }
+
+    addLog('info', `📦 Backlog-only dispatch triggered (limit: ${limit}, window: ${window})`);
+    dispatchInProgress = true;
+    currentDispatchWindow = 'backlog';
+
+    try {
+        const result = await runBacklogDispatch(window, addLog, limit);
+        res.json({ window, ...result });
+    } catch (error: any) {
+        addLog('error', `Backlog dispatch failed: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     } finally {
         dispatchInProgress = false;

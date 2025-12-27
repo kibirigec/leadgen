@@ -11,16 +11,24 @@ export interface QueuedLead {
     id: string;
     name: string;
     phone: string;
+    address?: string;
     website?: string;
     businessType?: string;
+    keyword?: string;
     city?: string;
+    suburb?: string;
     status: 'pending' | 'sent' | 'failed' | 'skipped';
     dispatchDate?: string;
     timeWindow?: 'morning' | 'lunch' | 'evening';
+    priority?: number;
     source?: string;
     isBackfill?: boolean;
+    createdAt?: string;
+    scrapedAt?: string;
     addedAt?: string;
     sentAt?: string;
+    failedAt?: string;
+    error?: string;
 }
 
 /**

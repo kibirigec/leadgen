@@ -135,14 +135,19 @@ export async function getQueueStats(dispatchDate?: string): Promise<{
 }
 
 /**
- * Clear old queue entries (older than 7 days)
+ * Clear old queue entries
+ * Only deletes SENT leads older than 30 days
+ * Keeps pending/failed for backlog use
+ * Total contacted is preserved via outreach_history
  */
 export async function cleanupOldQueue(): Promise<number> {
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 7);
+    cutoffDate.setDate(cutoffDate.getDate() - 30);
     const cutoffString = cutoffDate.toISOString().split('T')[0];
 
+    // Only delete sent leads (preserve pending/failed for backlog)
     const oldLeads = await db.collection("leads_queue")
+        .where("status", "==", "sent")
         .where("dispatchDate", "<", cutoffString)
         .limit(500)
         .get();
