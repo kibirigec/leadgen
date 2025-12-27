@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
-import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs } from "@/actions/bot";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History } from "lucide-react";
+import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode } from "@/actions/bot";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
 
@@ -38,6 +38,11 @@ interface WindowStats {
   evening: { pending: number; sent: number };
 }
 
+interface TestSettings {
+  testMode: boolean;
+  testPhone: string;
+}
+
 export function MonitorClient() {
   const [status, setStatus] = useState<BotStatus>({ status: "idle" });
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -53,6 +58,11 @@ export function MonitorClient() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
+
+  // Test mode state
+  const [testSettings, setTestSettings] = useState<TestSettings>({ testMode: false, testPhone: "" });
+  const [showTestSettings, setShowTestSettings] = useState(false);
+  const [testPhoneInput, setTestPhoneInput] = useState("");
 
   // Modal state
   const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | 'reserve' | 'backlog' | null>(null);
@@ -274,6 +284,24 @@ export function MonitorClient() {
     return () => unsubscribe();
   }, []);
 
+  // Subscribe to settings
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(clientDb, "system", "settings"),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setTestSettings({
+            testMode: data.testMode ?? false,
+            testPhone: data.testPhone ?? ""
+          });
+          setTestPhoneInput(data.testPhone ?? "");
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
   // Clear error after 3 seconds
   useEffect(() => {
     if (error) {
@@ -352,13 +380,61 @@ export function MonitorClient() {
     setLoading('scrape');
     try {
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-      const res = await fetch(`${workerUrl}/trigger/test-scrape`, { method: 'POST' });
+      const res = await fetch(`${workerUrl}/trigger/scrape`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       await fetchLeadStats();
       await fetchReservePool();
     } catch (err: any) {
       setError(err.message || 'Scrape failed');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const triggerDispatch = async (window: 'morning' | 'lunch' | 'evening') => {
+    setLoading(`dispatch-${window}`);
+    try {
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+      const res = await fetch(`${workerUrl}/trigger/dispatch/${window}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+    } catch (err: any) {
+      setError(err.message || 'Dispatch failed');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleToggleTestMode = async () => {
+    if (testSettings.testMode) {
+      // Disable test mode
+      setLoading('testmode');
+      try {
+        await setTestMode(false, testSettings.testPhone);
+        setShowTestSettings(false);
+      } catch (err: any) {
+        setError(err.message || 'Failed to update');
+      } finally {
+        setLoading(null);
+      }
+    } else {
+      // Show settings modal to enable
+      setShowTestSettings(true);
+    }
+  };
+
+  const handleSaveTestMode = async () => {
+    if (!testPhoneInput) {
+      setError('Test phone number required');
+      return;
+    }
+    setLoading('testmode');
+    try {
+      await setTestMode(true, testPhoneInput);
+      setShowTestSettings(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to enable test mode');
     } finally {
       setLoading(null);
     }
@@ -492,6 +568,112 @@ export function MonitorClient() {
         <div className="fixed top-4 left-4 right-4 max-w-lg mx-auto bg-rose-500/10 border border-rose-500/20 backdrop-blur-md text-rose-400 px-4 py-3 rounded-xl flex items-center gap-2 shadow-2xl z-50 animate-in slide-in-from-top-2">
           <XCircle className="w-5 h-5 shrink-0" />
           <span className="text-sm font-medium">{error}</span>
+        </div>
+      )}
+
+      {/* Test Mode Banner */}
+      {testSettings.testMode && (
+        <div className="mb-4 bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 flex items-center gap-3">
+          <FlaskConical className="w-5 h-5 text-orange-400" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-orange-400">🧪 TEST MODE ACTIVE</p>
+            <p className="text-xs text-orange-400/70">Messages → {testSettings.testPhone}</p>
+          </div>
+          <button 
+            onClick={handleToggleTestMode}
+            className="text-xs px-2 py-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg"
+          >
+            Disable
+          </button>
+        </div>
+      )}
+
+      {/* Manual Cron Triggers */}
+      <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Manual Triggers</span>
+          <button
+            onClick={handleToggleTestMode}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
+              testSettings.testMode 
+                ? 'bg-orange-500/20 text-orange-400' 
+                : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+            }`}
+          >
+            <FlaskConical className="w-3 h-3" />
+            {testSettings.testMode ? 'Test On' : 'Test Off'}
+          </button>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          <button
+            onClick={handleTriggerScrape}
+            disabled={loading !== null}
+            className="flex flex-col items-center gap-1 p-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-xl disabled:opacity-50 transition-all"
+          >
+            {loading === 'scrape' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            <span className="text-[10px] font-medium">Scrape</span>
+          </button>
+          <button
+            onClick={() => triggerDispatch('morning')}
+            disabled={loading !== null}
+            className="flex flex-col items-center gap-1 p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl disabled:opacity-50 transition-all"
+          >
+            {loading === 'dispatch-morning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">🌅</span>}
+            <span className="text-[10px] font-medium">Morning</span>
+          </button>
+          <button
+            onClick={() => triggerDispatch('lunch')}
+            disabled={loading !== null}
+            className="flex flex-col items-center gap-1 p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl disabled:opacity-50 transition-all"
+          >
+            {loading === 'dispatch-lunch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">☀️</span>}
+            <span className="text-[10px] font-medium">Lunch</span>
+          </button>
+          <button
+            onClick={() => triggerDispatch('evening')}
+            disabled={loading !== null}
+            className="flex flex-col items-center gap-1 p-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl disabled:opacity-50 transition-all"
+          >
+            {loading === 'dispatch-evening' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">🌙</span>}
+            <span className="text-[10px] font-medium">Evening</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Test Settings Modal */}
+      {showTestSettings && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 rounded-2xl p-6 max-w-sm w-full border border-zinc-800">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-orange-400" />
+              Enable Test Mode
+            </h3>
+            <p className="text-sm text-zinc-400 mb-4">
+              All messages will be sent to this phone number instead of the actual leads.
+            </p>
+            <input
+              type="tel"
+              value={testPhoneInput}
+              onChange={(e) => setTestPhoneInput(e.target.value)}
+              placeholder="256700000000"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-100 mb-4 focus:outline-none focus:border-orange-500"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowTestSettings(false)}
+                className="flex-1 py-2 text-zinc-400 hover:bg-zinc-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveTestMode}
+                disabled={loading === 'testmode'}
+                className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl disabled:opacity-50"
+              >
+                {loading === 'testmode' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Enable'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

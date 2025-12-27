@@ -100,3 +100,48 @@ export async function clearBotLogs() {
         return { success: false, error: error.message };
     }
 }
+
+// ============================================
+// TEST MODE SETTINGS
+// ============================================
+
+export interface TestSettings {
+    testMode: boolean;
+    testPhone: string;
+}
+
+export async function getSettings(): Promise<TestSettings> {
+    try {
+        const { db } = await import("@/lib/firebase");
+        const doc = await db.collection("system").doc("settings").get();
+        const data = doc.data();
+        return {
+            testMode: data?.testMode ?? false,
+            testPhone: data?.testPhone ?? "",
+        };
+    } catch (error) {
+        console.error("Error fetching settings:", error);
+        return { testMode: false, testPhone: "" };
+    }
+}
+
+export async function setTestMode(enabled: boolean, testPhone: string) {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("settings").set({
+            testMode: enabled,
+            testPhone: testPhone,
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        await addBotLog(
+            enabled ? "warning" : "info",
+            enabled ? `🧪 TEST MODE ENABLED - Phone: ${testPhone}` : "Test mode disabled"
+        );
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error updating settings:", error);
+        return { success: false, error: error.message };
+    }
+}

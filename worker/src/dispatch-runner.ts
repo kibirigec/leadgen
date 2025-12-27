@@ -4,7 +4,7 @@
  * Runs the WhatsApp bot for a specific time window
  */
 
-import { getDb, updateWorkerStatus } from './firebase';
+import { getDb, updateWorkerStatus, getTestSettings } from './firebase';
 import { runWhatsAppBot } from './bot';
 import { markPhoneUsed } from './deduplication';
 import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './telegram';
@@ -13,6 +13,12 @@ import { QueuedLead } from '../../shared/types';
 
 type LogFn = (level: string, message: string) => void;
 type TimeWindow = 'morning' | 'lunch' | 'evening';
+
+// Helper to get collection with test prefix
+async function getCollectionName(name: string): Promise<string> {
+    const settings = await getTestSettings();
+    return settings.testMode ? `test_${name}` : name;
+}
 
 export async function runDispatch(
     window: TimeWindow,
@@ -23,6 +29,14 @@ export async function runDispatch(
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
 
+    // Check test mode
+    const testSettings = await getTestSettings();
+    const collectionName = testSettings.testMode ? 'test_leads_queue' : 'leads_queue';
+
+    if (testSettings.testMode) {
+        log('info', `🧪 TEST MODE - Using collection: ${collectionName}`);
+    }
+
     log('info', `Starting ${window} dispatch${limit ? ` (limit: ${limit})` : ''}`);
 
     const defaultLimit = window === 'evening' ? 40 : 30;
@@ -30,7 +44,7 @@ export async function runDispatch(
 
     // 1. Fresh Leads (Today)
     log('info', `Step 1: Fetching fresh leads for ${window} (Target: ${targetLimit})`);
-    const freshLeadsSnap = await db.collection('leads_queue')
+    const freshLeadsSnap = await db.collection(collectionName)
         .where('timeWindow', '==', window)
         .where('dispatchDate', '==', today)
         .where('status', '==', 'pending')
@@ -46,7 +60,7 @@ export async function runDispatch(
         log('info', `Step 2: Gap detected (${gap}). Checking backlog (oldest first)...`);
 
         // Query directly for leads from previous days (not today)
-        const backlogSnap = await db.collection('leads_queue')
+        const backlogSnap = await db.collection(collectionName)
             .where('status', '==', 'pending')
             .where('dispatchDate', '<', today)
             .orderBy('dispatchDate', 'asc')
@@ -61,7 +75,7 @@ export async function runDispatch(
 
             // Update these leads to be "Today" so they show in Monitor
             for (const l of backlogCandidates) {
-                await db.collection('leads_queue').doc(l.id).update({
+                await db.collection(collectionName).doc(l.id).update({
                     dispatchDate: today,
                     timeWindow: window,
                     isBackfill: true
@@ -83,7 +97,7 @@ export async function runDispatch(
 
         log('info', `Step 2.5: Still short (${gap}). Checking failed leads for retry...`);
 
-        const failedSnap = await db.collection('leads_queue')
+        const failedSnap = await db.collection(collectionName)
             .where('status', '==', 'failed')
             .where('dispatchDate', '<', cutoffDate)
             .orderBy('dispatchDate', 'asc')
@@ -97,7 +111,7 @@ export async function runDispatch(
             log('info', `  Found ${failedCandidates.length} failed leads to retry.`);
 
             for (const l of failedCandidates) {
-                await db.collection('leads_queue').doc(l.id).update({
+                await db.collection(collectionName).doc(l.id).update({
                     status: 'pending',
                     dispatchDate: today,
                     timeWindow: window,
@@ -125,7 +139,7 @@ export async function runDispatch(
             // Add to leads_queue as "Today"
             for (const r of reserveLeads) {
                 // Ensure unique ID (phone based)
-                const newDocRef = db.collection('leads_queue').doc(r.id || r.phone.replace(/\D/g, ''));
+                const newDocRef = db.collection(collectionName).doc(r.id || r.phone.replace(/\D/g, ''));
                 const newLead = {
                     ...r,
                     status: 'pending',
@@ -168,7 +182,7 @@ export async function runDispatch(
         // So we should simulate the DB updates too.
 
         for (const lead of leads) {
-            await db.collection('leads_queue').doc(lead.id).update({
+            await db.collection(collectionName).doc(lead.id).update({
                 status: 'sent',
                 sentAt: new Date().toISOString(),
             });
@@ -247,6 +261,14 @@ export async function runBacklogDispatch(
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const cutoffDate = sevenDaysAgo.toISOString().split('T')[0];
 
+    // Check test mode
+    const testSettings = await getTestSettings();
+    const collectionName = testSettings.testMode ? 'test_leads_queue' : 'leads_queue';
+
+    if (testSettings.testMode) {
+        log('info', `🧪 TEST MODE - Using collection: ${collectionName}`);
+    }
+
     log('info', `📦 Starting BACKLOG-ONLY dispatch (limit: ${limit})`);
 
     let collectedLeads: QueuedLead[] = [];
@@ -255,7 +277,7 @@ export async function runBacklogDispatch(
 
     // 1. Backlog leads (oldest first, time-window agnostic)
     log('info', `Step 1: Fetching backlog leads (oldest first)...`);
-    const backlogSnap = await db.collection('leads_queue')
+    const backlogSnap = await db.collection(collectionName)
         .where('status', '==', 'pending')
         .where('dispatchDate', '<', today)
         .orderBy('dispatchDate', 'asc')
@@ -268,7 +290,7 @@ export async function runBacklogDispatch(
     if (backlogLeads.length > 0) {
         log('info', `  Found ${backlogLeads.length} backlog leads.`);
         for (const l of backlogLeads) {
-            await db.collection('leads_queue').doc(l.id).update({
+            await db.collection(collectionName).doc(l.id).update({
                 dispatchDate: today,
                 timeWindow: window,
                 isBackfill: true
@@ -285,7 +307,7 @@ export async function runBacklogDispatch(
         const gap = limit - collectedLeads.length;
         log('info', `Step 2: Checking failed leads for retry (gap: ${gap})...`);
 
-        const failedSnap = await db.collection('leads_queue')
+        const failedSnap = await db.collection(collectionName)
             .where('status', '==', 'failed')
             .where('dispatchDate', '<', cutoffDate)
             .orderBy('dispatchDate', 'asc')
@@ -298,7 +320,7 @@ export async function runBacklogDispatch(
         if (failedLeads.length > 0) {
             log('info', `  Found ${failedLeads.length} failed leads to retry.`);
             for (const l of failedLeads) {
-                await db.collection('leads_queue').doc(l.id).update({
+                await db.collection(collectionName).doc(l.id).update({
                     status: 'pending',
                     dispatchDate: today,
                     timeWindow: window,
@@ -323,7 +345,7 @@ export async function runBacklogDispatch(
         if (reserveLeads.length > 0) {
             log('info', `  Pulled ${reserveLeads.length} from reserve pool.`);
             for (const r of reserveLeads) {
-                const newDocRef = db.collection('leads_queue').doc(r.id || r.phone.replace(/\D/g, ''));
+                const newDocRef = db.collection(collectionName).doc(r.id || r.phone.replace(/\D/g, ''));
                 const newLead = {
                     ...r,
                     status: 'pending',
@@ -364,7 +386,7 @@ export async function runBacklogDispatch(
 
         for (const leadId of result.contactedLeadIds) {
             const lead = leads.find(l => l.id === leadId);
-            await db.collection('leads_queue').doc(leadId).update({
+            await db.collection(collectionName).doc(leadId).update({
                 status: 'sent',
                 sentAt: new Date().toISOString(),
             });

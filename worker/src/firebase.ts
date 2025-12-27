@@ -90,3 +90,66 @@ export async function getBotStatus(): Promise<string> {
         return 'running';
     }
 }
+
+// ============================================
+// TEST MODE SETTINGS
+// ============================================
+
+export interface TestSettings {
+    testMode: boolean;
+    testPhone: string;
+}
+
+// Cache for test settings to avoid repeated reads
+let cachedTestSettings: TestSettings | null = null;
+let testSettingsCacheTime = 0;
+const CACHE_TTL_MS = 10000; // 10 seconds
+
+export async function getTestSettings(): Promise<TestSettings> {
+    const now = Date.now();
+
+    // Return cached if still valid
+    if (cachedTestSettings && (now - testSettingsCacheTime) < CACHE_TTL_MS) {
+        return cachedTestSettings;
+    }
+
+    try {
+        const doc = await db.collection('system').doc('settings').get();
+        const data = doc.data();
+        cachedTestSettings = {
+            testMode: data?.testMode ?? false,
+            testPhone: data?.testPhone ?? '',
+        };
+        testSettingsCacheTime = now;
+        return cachedTestSettings;
+    } catch {
+        return { testMode: false, testPhone: '' };
+    }
+}
+
+// Clear cache (call when settings change)
+export function clearTestSettingsCache(): void {
+    cachedTestSettings = null;
+    testSettingsCacheTime = 0;
+}
+
+/**
+ * Get collection reference with optional test_ prefix
+ * When testMode is active, returns test_collectionName
+ */
+export function getCollection(name: string): admin.firestore.CollectionReference {
+    if (!db) throw new Error('Firebase not initialized');
+
+    // Use cached testMode (sync check for performance)
+    const prefix = cachedTestSettings?.testMode ? 'test_' : '';
+    return db.collection(`${prefix}${name}`);
+}
+
+/**
+ * Async version that checks testMode from Firestore
+ */
+export async function getCollectionAsync(name: string): Promise<admin.firestore.CollectionReference> {
+    const settings = await getTestSettings();
+    const prefix = settings.testMode ? 'test_' : '';
+    return db.collection(`${prefix}${name}`);
+}

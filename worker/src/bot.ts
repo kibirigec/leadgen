@@ -9,7 +9,7 @@ import type { Browser, Page } from 'puppeteer';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import os from 'os';
 import path from 'path';
-import { getDb, getBotStatus } from './firebase';
+import { getDb, getBotStatus, getTestSettings } from './firebase';
 import { getMessage } from './message-variants';
 import { isValidPhone, normalizePhone } from '../../shared/phone-utils';
 import { QueuedLead } from '../../shared/types';
@@ -63,12 +63,21 @@ export async function runWhatsAppBot(
 ): Promise<{ success: boolean; sentCount: number; contactedLeadIds: string[] }> {
     const sessionDir = process.env.WWEB_SESSION_PATH || path.join(os.homedir(), '.wweb_session');
 
+    // Check test mode
+    const testSettings = await getTestSettings();
+    const isTestMode = testSettings.testMode && testSettings.testPhone;
+
+    if (isTestMode) {
+        log('info', `🧪 TEST MODE ACTIVE - All messages will go to: ${testSettings.testPhone}`);
+        await addBotLog('warning', `TEST MODE: Messages redirected to ${testSettings.testPhone}`);
+    }
+
     log('info', `Starting bot with ${leads.length} leads`);
     log('info', `Session: ${sessionDir}`);
 
     // Update dashboard status
     await updateBotStatus({ status: 'starting', totalLeads: leads.length, processedLeads: 0, errorCount: 0 });
-    await addBotLog('info', `Bot starting with ${leads.length} leads`);
+    await addBotLog('info', `Bot starting with ${leads.length} leads${isTestMode ? ' [TEST MODE]' : ''}`);
 
     let browser: any;
     let page: any;
@@ -185,7 +194,15 @@ export async function runWhatsAppBot(
                     console.log(`[DEBUG] Skipped due to invalid phone`);
                     continue;
                 }
-                const phoneNumber = normalizePhone(lead.phone);
+
+                // Override phone with test phone when in test mode
+                const actualPhone = isTestMode ? testSettings.testPhone : lead.phone;
+                const phoneNumber = normalizePhone(actualPhone);
+
+                if (isTestMode) {
+                    log('info', `  🧪 [TEST] Sending to ${phoneNumber} instead of ${lead.phone}`);
+                }
+
                 const url = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`;
                 console.log(`[DEBUG] Navigating to: ${url.substring(0, 50)}...`);
 
