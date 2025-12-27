@@ -8,6 +8,8 @@ import { getDb, updateWorkerStatus } from './firebase';
 import { runWhatsAppBot } from './bot';
 import { markPhoneUsed } from './deduplication';
 import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './telegram';
+import { pullFromReservePool } from './reserve-pool';
+import { QueuedLead } from '../../shared/types';
 
 type LogFn = (level: string, message: string) => void;
 type TimeWindow = 'morning' | 'lunch' | 'evening';
@@ -35,7 +37,7 @@ export async function runDispatch(
         .limit(targetLimit * 2) // Fetch extra for deduplication
         .get();
 
-    let collectedLeads = freshLeadsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+    let collectedLeads: QueuedLead[] = freshLeadsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as Omit<QueuedLead, 'id'> }));
     log('info', `  Found ${collectedLeads.length} fresh leads`);
 
     // 2. Backlog (Gap 1)
@@ -51,8 +53,8 @@ export async function runDispatch(
             .limit(100)
             .get();
 
-        const backlogCandidates = backlogSnap.docs
-            .map(doc => ({ id: doc.id, ...doc.data() as any }))
+        const backlogCandidates: QueuedLead[] = backlogSnap.docs
+            .map(doc => ({ id: doc.id, ...doc.data() as Omit<QueuedLead, 'id'> }))
             .filter(l => l.dispatchDate !== today) // Exclude leads already scheduled for today
             .slice(0, gap);
 
@@ -79,7 +81,6 @@ export async function runDispatch(
         const gap = targetLimit - collectedLeads.length;
         log('info', `Step 3: Still short (${gap}). Checking Reserve Pool...`);
 
-        const { pullFromReservePool } = require('./reserve-pool');
         const reserveLeads = await pullFromReservePool(window, gap);
 
         if (reserveLeads.length > 0) {
@@ -99,7 +100,7 @@ export async function runDispatch(
                 };
 
                 await newDocRef.set(newLead, { merge: true });
-                collectedLeads.push({ id: newDocRef.id, ...newLead });
+                collectedLeads.push({ id: newDocRef.id, ...newLead } as QueuedLead);
             }
         }
     }

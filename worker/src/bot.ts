@@ -5,44 +5,21 @@
  */
 
 import puppeteer from 'puppeteer-extra';
+import type { Browser, Page } from 'puppeteer';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import os from 'os';
 import path from 'path';
 import { getDb, getBotStatus } from './firebase';
 import { getMessage } from './message-variants';
+import { isValidPhone, normalizePhone } from '../../shared/phone-utils';
+import { QueuedLead } from '../../shared/types';
 
 puppeteer.use(StealthPlugin());
 
 type LogFn = (level: string, message: string) => void;
 
-interface Lead {
-    id: string;
-    name: string;
-    phone: string;
-    website?: string;
-    businessType?: string;
-    city?: string;
-}
-
-// Phone number validation
-function isValidPhone(phone: string): boolean {
-    // Remove all non-digit characters
-    const cleaned = phone.replace(/\D/g, '');
-    // Valid if 10-15 digits (international format)
-    return cleaned.length >= 10 && cleaned.length <= 15;
-}
-
-// Normalize phone number for WhatsApp
-function normalizePhone(phone: string): string {
-    let cleaned = phone.replace(/\D/g, '');
-    // Add Uganda country code if missing
-    if (cleaned.startsWith('0')) {
-        cleaned = '256' + cleaned.substring(1);
-    } else if (!cleaned.startsWith('256') && cleaned.length === 9) {
-        cleaned = '256' + cleaned;
-    }
-    return cleaned;
-}
+// Re-export for backwards compatibility
+type Lead = QueuedLead;
 
 // Update bot status in Firestore (for /monitor dashboard)
 async function updateBotStatus(data: {
@@ -59,12 +36,8 @@ async function updateBotStatus(data: {
             updatedAt: new Date().toISOString(),
         }, { merge: true });
     } catch (e) {
-        // Fallback for local debugging (when Firebase isn't init)
-        if ((e as Error).message.includes('not initialized')) {
-            // console.log('[LOCAL DEBUG] Status Update:', data);
-        } else {
-            console.error('Failed to update bot status:', e);
-        }
+        // Log all failures - don't silently swallow errors
+        console.error('[BOT] Failed to update bot status:', e);
     }
 }
 
@@ -136,9 +109,6 @@ export async function runWhatsAppBot(
         page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 2 });
 
-        // Disable request interception to ensure all UI assets load (Stability > Speed)
-        // await page.setRequestInterception(true);
-        // page.on('request', (replaceRequest: any) => { ... });
 
         log('info', 'Navigating to WhatsApp Web...');
         await page.goto('https://web.whatsapp.com', {

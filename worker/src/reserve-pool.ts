@@ -6,6 +6,7 @@
  */
 
 import { getDb } from './firebase';
+import { normalizePhone } from '../../shared/phone-utils';
 
 export type TimeWindow = 'morning' | 'lunch' | 'evening';
 
@@ -43,20 +44,6 @@ export function calculatePriority(lead: {
     }
 
     return Math.min(100, Math.max(0, score));
-}
-
-/**
- * Normalize phone for deduplication
- */
-function normalizePhone(phone: string): string {
-    let cleaned = phone.replace(/\D/g, '');
-    if (cleaned.startsWith('0')) {
-        cleaned = '256' + cleaned.slice(1);
-    }
-    if (!cleaned.startsWith('256') && cleaned.length === 9) {
-        cleaned = '256' + cleaned;
-    }
-    return cleaned;
 }
 
 /**

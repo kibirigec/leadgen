@@ -7,15 +7,8 @@
 
 import { db } from "@/lib/firebase";
 import { DAILY_SETTINGS } from "./outreach-config";
-
-export interface OutreachHistoryEntry {
-    phone: string;
-    businessName: string;
-    firstContactedAt: string;
-    lastContactedAt: string;
-    totalAttempts: number;
-    status: "contacted" | "replied" | "blocked" | "failed";
-}
+import { normalizePhone } from "../../shared/phone-utils";
+import { OutreachHistoryEntry } from "../../shared/types";
 
 /**
  * Check if a phone number has been contacted recently
@@ -110,25 +103,6 @@ export async function filterUnusedPhones(
     }
 
     return results;
-}
-
-/**
- * Normalize phone number for consistent storage
- */
-function normalizePhone(phone: string): string {
-    // Remove all non-digits
-    let cleaned = phone.replace(/\D/g, "");
-
-    // Handle Uganda numbers
-    if (cleaned.startsWith("0")) {
-        cleaned = "256" + cleaned.slice(1);
-    }
-
-    if (!cleaned.startsWith("256") && cleaned.length === 9) {
-        cleaned = "256" + cleaned;
-    }
-
-    return cleaned;
 }
 
 /**

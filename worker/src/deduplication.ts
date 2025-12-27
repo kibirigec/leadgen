@@ -6,35 +6,9 @@
  */
 
 import { getDb } from './firebase';
-
-// Days before recontacting
-const RECONTACT_COOLDOWN_DAYS = 30;
-
-export interface OutreachHistoryEntry {
-    phone: string;
-    businessName: string;
-    firstContactedAt: string;
-    lastContactedAt: string;
-    totalAttempts: number;
-    status: 'contacted' | 'replied' | 'blocked' | 'failed';
-}
-
-/**
- * Normalize phone number for consistent storage
- */
-function normalizePhone(phone: string): string {
-    let cleaned = phone.replace(/\D/g, '');
-
-    if (cleaned.startsWith('0')) {
-        cleaned = '256' + cleaned.slice(1);
-    }
-
-    if (!cleaned.startsWith('256') && cleaned.length === 9) {
-        cleaned = '256' + cleaned;
-    }
-
-    return cleaned;
-}
+import { normalizePhone } from '../../shared/phone-utils';
+import { RECONTACT_COOLDOWN_DAYS } from '../../shared/constants';
+import { OutreachHistoryEntry } from '../../shared/types';
 
 /**
  * Check if a phone number has been contacted recently

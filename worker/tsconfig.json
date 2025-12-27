@@ -6,16 +6,23 @@
             "ES2020"
         ],
         "outDir": "./dist",
-        "rootDir": "./src",
+        "rootDir": "..",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
-        "declaration": true
+        "declaration": true,
+        "baseUrl": "..",
+        "paths": {
+            "@shared/*": [
+                "shared/*"
+            ]
+        }
     },
     "include": [
-        "src/**/*"
+        "src/**/*",
+        "../shared/**/*"
     ],
     "exclude": [
         "node_modules",
