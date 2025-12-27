@@ -182,6 +182,16 @@ cron.schedule('15 20 * * *', async () => {
 
 
 
+// CRITICAL TEST: 4:10 PM EAT = 13:10 UTC
+cron.schedule('10 13 * * *', async () => {
+    addLog('info', '⏰ TEST Dispatch cron triggered (4:10 PM EAT)');
+    try {
+        await runDispatch('morning', addLog);
+    } catch (error: any) {
+        addLog('error', `Test dispatch failed: ${error.message}`);
+    }
+}, { timezone: 'UTC' });
+
 // 6:30 AM EAT = 3:30 AM UTC
 cron.schedule('30 3 * * *', async () => {
     addLog('info', '⏰ Morning dispatch cron triggered (6:30 AM EAT)');

@@ -160,7 +160,16 @@ export async function runWhatsAppBot(
         await updateBotStatus({ status: 'running' });
 
         // Process leads
+        let splashLoopCount = 0;
+        let lastLeadIndex = -1;
+
         for (let i = 0; i < leads.length; i++) {
+            // Reset splash counter for new leads
+            if (i !== lastLeadIndex) {
+                splashLoopCount = 0;
+                lastLeadIndex = i;
+            }
+
             const lead = leads[i];
             const currentStatus = await getBotStatus();
 
@@ -258,6 +267,13 @@ export async function runWhatsAppBot(
                     const pageContent = await page.content();
 
                     if (pageContent.includes('splashscreen')) {
+                        splashLoopCount++;
+                        if (splashLoopCount > 2) {
+                            log('error', `❌ Critical: Stuck in splash loop for ${lead.phone}. Skipping lead.`);
+                            // Proceed to next lead (do not i--)
+                            continue;
+                        }
+
                         log('warning', '⚠️ Splash screen detected. Waiting for auto-reload to finish...');
                         // Graceful recovery: Wait for app to become ready again
                         try {
