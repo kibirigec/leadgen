@@ -6,7 +6,7 @@
 
 import { getDb, updateWorkerStatus, getTestSettings } from './firebase';
 import { runWhatsAppBot } from './bot';
-import { markPhoneUsed } from './deduplication';
+import { markPhoneUsed, isPhoneUsed } from './deduplication';
 import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './telegram';
 import { pullFromReservePool } from './reserve-pool';
 import { QueuedLead } from '../../shared/types';
@@ -160,9 +160,9 @@ export async function runDispatch(
         return { success: true, sentCount: 0 };
     }
 
-    // Deduplicate by phone number
+    // Deduplicate by phone number (in-batch)
     const seenPhones = new Set<string>();
-    const leads = collectedLeads.filter(lead => {
+    const uniqueLeads = collectedLeads.filter(lead => {
         const phone = lead.phone?.replace(/\D/g, '');
         if (!phone || seenPhones.has(phone)) {
             return false;
@@ -171,7 +171,27 @@ export async function runDispatch(
         return true;
     }).slice(0, targetLimit);
 
-    log('info', `Found ${collectedLeads.length} raw, ${leads.length} unique leads to process`);
+    // Check against outreach_history (previously contacted)
+    log('info', `Checking ${uniqueLeads.length} leads against outreach history...`);
+    const leads: typeof uniqueLeads = [];
+    let skippedCount = 0;
+
+    for (const lead of uniqueLeads) {
+        const alreadyContacted = await isPhoneUsed(lead.phone);
+        if (alreadyContacted) {
+            skippedCount++;
+            // Mark as skipped in queue to avoid re-processing
+            await db.collection(collectionName).doc(lead.id).update({ status: 'skipped' });
+        } else {
+            leads.push(lead);
+        }
+    }
+
+    if (skippedCount > 0) {
+        log('warning', `Skipped ${skippedCount} already-contacted numbers`);
+    }
+
+    log('info', `Found ${collectedLeads.length} raw, ${uniqueLeads.length} unique, ${leads.length} fresh leads to process`);
 
     // Dry Run: Skip bot and notifications, but SIMULATE success for testing
     if (dryRun) {
@@ -366,14 +386,33 @@ export async function runBacklogDispatch(
         return { success: true, sentCount: 0, backlogCount: 0, reserveCount: 0 };
     }
 
-    // Deduplicate by phone
+    // Deduplicate by phone (in-batch)
     const seenPhones = new Set<string>();
-    const leads = collectedLeads.filter(lead => {
+    const uniqueLeads = collectedLeads.filter(lead => {
         const phone = lead.phone?.replace(/\D/g, '');
         if (!phone || seenPhones.has(phone)) return false;
         seenPhones.add(phone);
         return true;
     }).slice(0, limit);
+
+    // Check against outreach_history (previously contacted)
+    log('info', `Checking ${uniqueLeads.length} leads against outreach history...`);
+    const leads: typeof uniqueLeads = [];
+    let skippedCount = 0;
+
+    for (const lead of uniqueLeads) {
+        const alreadyContacted = await isPhoneUsed(lead.phone);
+        if (alreadyContacted) {
+            skippedCount++;
+            await db.collection(collectionName).doc(lead.id).update({ status: 'skipped' });
+        } else {
+            leads.push(lead);
+        }
+    }
+
+    if (skippedCount > 0) {
+        log('warning', `Skipped ${skippedCount} already-contacted numbers`);
+    }
 
     log('info', `Dispatching ${leads.length} leads (${backlogCount} backlog, ${reserveCount} reserve)`);
 
