@@ -696,6 +696,32 @@ export function MonitorClient() {
         </div>
       </div>
 
+      {/* Cron Schedule */}
+      <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Automated Schedule (EAT)</span>
+          <span className="text-[10px] text-zinc-600">Next runs when enabled</span>
+        </div>
+        <div className="grid grid-cols-4 gap-2 text-center">
+          <div className={`p-2 rounded-lg ${settings.scrapeEnabled ? 'bg-purple-500/10' : 'bg-zinc-800/30'}`}>
+            <div className={`text-xs font-bold ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-600'}`}>5:00 AM</div>
+            <div className="text-[10px] text-zinc-500">Scrape</div>
+          </div>
+          <div className={`p-2 rounded-lg ${settings.dispatchEnabled ? 'bg-blue-500/10' : 'bg-zinc-800/30'}`}>
+            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-600'}`}>6:30 AM</div>
+            <div className="text-[10px] text-zinc-500">Morning</div>
+          </div>
+          <div className={`p-2 rounded-lg ${settings.dispatchEnabled ? 'bg-amber-500/10' : 'bg-zinc-800/30'}`}>
+            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-600'}`}>12:30 PM</div>
+            <div className="text-[10px] text-zinc-500">Lunch</div>
+          </div>
+          <div className={`p-2 rounded-lg ${settings.dispatchEnabled ? 'bg-indigo-500/10' : 'bg-zinc-800/30'}`}>
+            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-600'}`}>7:30 PM</div>
+            <div className="text-[10px] text-zinc-500">Evening</div>
+          </div>
+        </div>
+      </div>
+
       {/* Test Settings Modal */}
       {showTestSettings && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
