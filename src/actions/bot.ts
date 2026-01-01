@@ -233,8 +233,23 @@ export async function setCronTime(
 ) {
     try {
         const { db } = await import("@/lib/firebase");
-        await db.collection("system").doc("settings").set({
-            [`cronTimes.${window}`]: { hour, minute },
+        const settingsRef = db.collection("system").doc("settings");
+
+        // Get current cronTimes or use defaults
+        const doc = await settingsRef.get();
+        const data = doc.data();
+        const currentCronTimes = data?.cronTimes || {
+            scrape: { hour: 5, minute: 0 },
+            morning: { hour: 6, minute: 30 },
+            lunch: { hour: 12, minute: 30 },
+            evening: { hour: 19, minute: 30 },
+        };
+
+        // Update the specific window
+        currentCronTimes[window] = { hour, minute };
+
+        await settingsRef.set({
+            cronTimes: currentCronTimes,
             updatedAt: new Date().toISOString(),
         }, { merge: true });
 
