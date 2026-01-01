@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
-import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled } from "@/actions/bot";
+import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled, setCronTime } from "@/actions/bot";
 import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
@@ -39,12 +39,30 @@ interface WindowStats {
 }
 
 
+interface CronTime {
+  hour: number;
+  minute: number;
+}
+
 interface SystemSettings {
   testMode: boolean;
   testPhone: string;
   scrapeEnabled: boolean;
   dispatchEnabled: boolean;
+  cronTimes: {
+    scrape: CronTime;
+    morning: CronTime;
+    lunch: CronTime;
+    evening: CronTime;
+  };
 }
+
+const DEFAULT_CRON_TIMES = {
+  scrape: { hour: 5, minute: 0 },
+  morning: { hour: 6, minute: 30 },
+  lunch: { hour: 12, minute: 30 },
+  evening: { hour: 19, minute: 30 },
+};
 
 export function MonitorClient() {
   const [status, setStatus] = useState<BotStatus>({ status: "idle" });
@@ -63,7 +81,13 @@ export function MonitorClient() {
   const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
 
   // Settings state
-  const [settings, setSettings] = useState<SystemSettings>({ testMode: false, testPhone: "", scrapeEnabled: true, dispatchEnabled: true });
+  const [settings, setSettings] = useState<SystemSettings>({ 
+    testMode: false, 
+    testPhone: "", 
+    scrapeEnabled: true, 
+    dispatchEnabled: true,
+    cronTimes: DEFAULT_CRON_TIMES,
+  });
   const [showTestSettings, setShowTestSettings] = useState(false);
   const [testPhoneInput, setTestPhoneInput] = useState("");
 
@@ -299,6 +323,12 @@ export function MonitorClient() {
             testPhone: data.testPhone ?? "",
             scrapeEnabled: data.scrapeEnabled ?? true,
             dispatchEnabled: data.dispatchEnabled ?? true,
+            cronTimes: {
+              scrape: data.cronTimes?.scrape ?? DEFAULT_CRON_TIMES.scrape,
+              morning: data.cronTimes?.morning ?? DEFAULT_CRON_TIMES.morning,
+              lunch: data.cronTimes?.lunch ?? DEFAULT_CRON_TIMES.lunch,
+              evening: data.cronTimes?.evening ?? DEFAULT_CRON_TIMES.evening,
+            },
           });
           setTestPhoneInput(data.testPhone ?? "");
         }
@@ -700,27 +730,91 @@ export function MonitorClient() {
       <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Automated Schedule (EAT)</span>
-          <span className="text-[10px] text-zinc-600">Next runs when enabled</span>
+          <span className="text-[10px] text-zinc-600">Click to edit</span>
         </div>
         <div className="grid grid-cols-4 gap-2 text-center">
-          <div className={`p-2 rounded-lg ${settings.scrapeEnabled ? 'bg-purple-500/10' : 'bg-zinc-800/30'}`}>
-            <div className={`text-xs font-bold ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-600'}`}>5:00 AM</div>
+          <button
+            onClick={() => {
+              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.scrape.hour));
+              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.scrape.minute));
+              if (newHour !== null && newMinute !== null) {
+                setCronTime('scrape', parseInt(newHour), parseInt(newMinute));
+              }
+            }}
+            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-purple-500/50 transition-all ${settings.scrapeEnabled ? 'bg-purple-500/10' : 'bg-zinc-800/30'}`}
+          >
+            <div className={`text-xs font-bold ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-600'}`}>
+              {settings.cronTimes.scrape.hour}:{String(settings.cronTimes.scrape.minute).padStart(2, '0')}
+            </div>
             <div className="text-[10px] text-zinc-500">Scrape</div>
-          </div>
-          <div className={`p-2 rounded-lg ${settings.dispatchEnabled ? 'bg-blue-500/10' : 'bg-zinc-800/30'}`}>
-            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-600'}`}>6:30 AM</div>
+          </button>
+          <button
+            onClick={() => {
+              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.morning.hour));
+              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.morning.minute));
+              if (newHour !== null && newMinute !== null) {
+                setCronTime('morning', parseInt(newHour), parseInt(newMinute));
+              }
+            }}
+            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-blue-500/50 transition-all ${settings.dispatchEnabled ? 'bg-blue-500/10' : 'bg-zinc-800/30'}`}
+          >
+            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-600'}`}>
+              {settings.cronTimes.morning.hour}:{String(settings.cronTimes.morning.minute).padStart(2, '0')}
+            </div>
             <div className="text-[10px] text-zinc-500">Morning</div>
-          </div>
-          <div className={`p-2 rounded-lg ${settings.dispatchEnabled ? 'bg-amber-500/10' : 'bg-zinc-800/30'}`}>
-            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-600'}`}>12:30 PM</div>
+          </button>
+          <button
+            onClick={() => {
+              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.lunch.hour));
+              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.lunch.minute));
+              if (newHour !== null && newMinute !== null) {
+                setCronTime('lunch', parseInt(newHour), parseInt(newMinute));
+              }
+            }}
+            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-amber-500/50 transition-all ${settings.dispatchEnabled ? 'bg-amber-500/10' : 'bg-zinc-800/30'}`}
+          >
+            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-600'}`}>
+              {settings.cronTimes.lunch.hour}:{String(settings.cronTimes.lunch.minute).padStart(2, '0')}
+            </div>
             <div className="text-[10px] text-zinc-500">Lunch</div>
-          </div>
-          <div className={`p-2 rounded-lg ${settings.dispatchEnabled ? 'bg-indigo-500/10' : 'bg-zinc-800/30'}`}>
-            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-600'}`}>7:30 PM</div>
+          </button>
+          <button
+            onClick={() => {
+              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.evening.hour));
+              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.evening.minute));
+              if (newHour !== null && newMinute !== null) {
+                setCronTime('evening', parseInt(newHour), parseInt(newMinute));
+              }
+            }}
+            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-indigo-500/50 transition-all ${settings.dispatchEnabled ? 'bg-indigo-500/10' : 'bg-zinc-800/30'}`}
+          >
+            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-600'}`}>
+              {settings.cronTimes.evening.hour}:{String(settings.cronTimes.evening.minute).padStart(2, '0')}
+            </div>
             <div className="text-[10px] text-zinc-500">Evening</div>
-          </div>
+          </button>
         </div>
+        {/* Reschedule button */}
+        <button
+          onClick={async () => {
+            setLoading('reschedule');
+            try {
+              const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+              await fetch(`${workerUrl}/reschedule`, { method: 'POST' });
+            } catch (err: any) {
+              setError(err.message);
+            } finally {
+              setLoading(null);
+            }
+          }}
+          disabled={loading !== null}
+          className="mt-2 w-full text-center text-xs text-zinc-500 hover:text-zinc-300 py-1 rounded hover:bg-white/5 transition-all"
+        >
+          {loading === 'reschedule' ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : '🔄 Apply Changes (Reschedule Worker)'}
+        </button>
       </div>
+
+
 
       {/* Test Settings Modal */}
       {showTestSettings && (

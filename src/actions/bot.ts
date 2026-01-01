@@ -105,12 +105,33 @@ export async function clearBotLogs() {
 // SYSTEM SETTINGS
 // ============================================
 
+export interface CronTime {
+    hour: number;
+    minute: number;
+}
+
+export interface CronTimes {
+    scrape: CronTime;
+    morning: CronTime;
+    lunch: CronTime;
+    evening: CronTime;
+}
+
 export interface SystemSettings {
     testMode: boolean;
     testPhone: string;
     scrapeEnabled: boolean;
     dispatchEnabled: boolean;
+    cronTimes: CronTimes;
 }
+
+// Default cron times
+const DEFAULT_CRON_TIMES: CronTimes = {
+    scrape: { hour: 5, minute: 0 },
+    morning: { hour: 6, minute: 30 },
+    lunch: { hour: 12, minute: 30 },
+    evening: { hour: 19, minute: 30 },
+};
 
 // Backwards compatible alias
 export type TestSettings = SystemSettings;
@@ -125,10 +146,22 @@ export async function getSettings(): Promise<SystemSettings> {
             testPhone: data?.testPhone ?? "",
             scrapeEnabled: data?.scrapeEnabled ?? true,
             dispatchEnabled: data?.dispatchEnabled ?? true,
+            cronTimes: {
+                scrape: data?.cronTimes?.scrape ?? DEFAULT_CRON_TIMES.scrape,
+                morning: data?.cronTimes?.morning ?? DEFAULT_CRON_TIMES.morning,
+                lunch: data?.cronTimes?.lunch ?? DEFAULT_CRON_TIMES.lunch,
+                evening: data?.cronTimes?.evening ?? DEFAULT_CRON_TIMES.evening,
+            },
         };
     } catch (error) {
         console.error("Error fetching settings:", error);
-        return { testMode: false, testPhone: "", scrapeEnabled: true, dispatchEnabled: true };
+        return {
+            testMode: false,
+            testPhone: "",
+            scrapeEnabled: true,
+            dispatchEnabled: true,
+            cronTimes: DEFAULT_CRON_TIMES,
+        };
     }
 }
 
@@ -193,3 +226,29 @@ export async function setDispatchEnabled(enabled: boolean) {
     }
 }
 
+export async function setCronTime(
+    window: 'scrape' | 'morning' | 'lunch' | 'evening',
+    hour: number,
+    minute: number
+) {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("settings").set({
+            [`cronTimes.${window}`]: { hour, minute },
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        const formatTime = (h: number, m: number) =>
+            `${h}:${String(m).padStart(2, '0')}`;
+
+        await addBotLog(
+            "info",
+            `⏰ ${window} cron time changed to ${formatTime(hour, minute)} EAT`
+        );
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error updating cron time:", error);
+        return { success: false, error: error.message };
+    }
+}

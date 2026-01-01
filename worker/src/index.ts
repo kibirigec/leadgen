@@ -223,114 +223,161 @@ app.post('/trigger/test-telegram', async (req, res) => {
 });
 
 // ============================================
-// CRON JOBS (EAT = UTC+3)
+// CRON JOBS (Dynamic from Settings)
 // ============================================
 
-// 5:00 AM EAT = 2:00 AM UTC - Daily scrape (300 leads)
-cron.schedule('0 2 * * *', async () => {
-    addLog('info', '⏰ Scrape cron triggered (5:00 AM EAT)');
+// Convert EAT time to UTC cron expression
+function eatToUtcCron(hour: number, minute: number): string {
+    // EAT = UTC+3, so subtract 3 hours
+    let utcHour = hour - 3;
+    if (utcHour < 0) utcHour += 24;
+    return `${minute} ${utcHour} * * *`;
+}
 
-    // Check if scrape is enabled
+// Store scheduled tasks for cleanup
+const scheduledTasks: cron.ScheduledTask[] = [];
+
+// Schedule all cron jobs based on settings
+async function scheduleCronJobs() {
     const { getSystemSettings } = await import('./firebase');
     const settings = await getSystemSettings();
-    if (!settings.scrapeEnabled) {
-        addLog('warning', '⏸️ Scrape skipped - disabled in settings');
-        return;
-    }
+    const { cronTimes } = settings;
 
+    // Clear any existing tasks
+    scheduledTasks.forEach(task => task.stop());
+    scheduledTasks.length = 0;
+
+    // Scrape cron
+    const scrapeCron = eatToUtcCron(cronTimes.scrape.hour, cronTimes.scrape.minute);
+    scheduledTasks.push(cron.schedule(scrapeCron, async () => {
+        const eatTime = `${cronTimes.scrape.hour}:${String(cronTimes.scrape.minute).padStart(2, '0')}`;
+        addLog('info', `⏰ Scrape cron triggered (${eatTime} EAT)`);
+
+        const currentSettings = await getSystemSettings();
+        if (!currentSettings.scrapeEnabled) {
+            addLog('warning', '⏸️ Scrape skipped - disabled in settings');
+            return;
+        }
+
+        try {
+            await runScrape(addLog);
+        } catch (error: any) {
+            addLog('error', `Scrape cron failed: ${error.message}`);
+        }
+    }, { timezone: 'UTC' }));
+
+    // Morning dispatch cron
+    const morningCron = eatToUtcCron(cronTimes.morning.hour, cronTimes.morning.minute);
+    scheduledTasks.push(cron.schedule(morningCron, async () => {
+        const eatTime = `${cronTimes.morning.hour}:${String(cronTimes.morning.minute).padStart(2, '0')}`;
+        addLog('info', `⏰ Morning dispatch cron triggered (${eatTime} EAT)`);
+
+        const currentSettings = await getSystemSettings();
+        if (!currentSettings.dispatchEnabled) {
+            addLog('warning', '⏸️ Morning dispatch skipped - disabled in settings');
+            return;
+        }
+
+        if (dispatchInProgress) {
+            addLog('warning', 'Morning dispatch skipped - another dispatch in progress');
+            return;
+        }
+
+        dispatchInProgress = true;
+        currentDispatchWindow = 'morning';
+        try {
+            await runDispatch('morning', addLog);
+        } catch (error: any) {
+            addLog('error', `Morning dispatch failed: ${error.message}`);
+        } finally {
+            dispatchInProgress = false;
+            currentDispatchWindow = null;
+        }
+    }, { timezone: 'UTC' }));
+
+    // Lunch dispatch cron
+    const lunchCron = eatToUtcCron(cronTimes.lunch.hour, cronTimes.lunch.minute);
+    scheduledTasks.push(cron.schedule(lunchCron, async () => {
+        const eatTime = `${cronTimes.lunch.hour}:${String(cronTimes.lunch.minute).padStart(2, '0')}`;
+        addLog('info', `⏰ Lunch dispatch cron triggered (${eatTime} EAT)`);
+
+        const currentSettings = await getSystemSettings();
+        if (!currentSettings.dispatchEnabled) {
+            addLog('warning', '⏸️ Lunch dispatch skipped - disabled in settings');
+            return;
+        }
+
+        if (dispatchInProgress) {
+            addLog('warning', 'Lunch dispatch skipped - another dispatch in progress');
+            return;
+        }
+
+        dispatchInProgress = true;
+        currentDispatchWindow = 'lunch';
+        try {
+            await runDispatch('lunch', addLog);
+        } catch (error: any) {
+            addLog('error', `Lunch dispatch failed: ${error.message}`);
+        } finally {
+            dispatchInProgress = false;
+            currentDispatchWindow = null;
+        }
+    }, { timezone: 'UTC' }));
+
+    // Evening dispatch cron
+    const eveningCron = eatToUtcCron(cronTimes.evening.hour, cronTimes.evening.minute);
+    scheduledTasks.push(cron.schedule(eveningCron, async () => {
+        const eatTime = `${cronTimes.evening.hour}:${String(cronTimes.evening.minute).padStart(2, '0')}`;
+        addLog('info', `⏰ Evening dispatch cron triggered (${eatTime} EAT)`);
+
+        const currentSettings = await getSystemSettings();
+        if (!currentSettings.dispatchEnabled) {
+            addLog('warning', '⏸️ Evening dispatch skipped - disabled in settings');
+            return;
+        }
+
+        if (dispatchInProgress) {
+            addLog('warning', 'Evening dispatch skipped - another dispatch in progress');
+            return;
+        }
+
+        dispatchInProgress = true;
+        currentDispatchWindow = 'evening';
+        try {
+            await runDispatch('evening', addLog);
+        } catch (error: any) {
+            addLog('error', `Evening dispatch failed: ${error.message}`);
+        } finally {
+            dispatchInProgress = false;
+            currentDispatchWindow = null;
+        }
+    }, { timezone: 'UTC' }));
+
+    // Log scheduled times
+    const formatTime = (t: { hour: number; minute: number }) =>
+        `${t.hour}:${String(t.minute).padStart(2, '0')} EAT`;
+
+    addLog('info', 'Cron jobs scheduled:');
+    addLog('info', `  - Scrape: ${formatTime(cronTimes.scrape)}`);
+    addLog('info', `  - Morning: ${formatTime(cronTimes.morning)}`);
+    addLog('info', `  - Lunch: ${formatTime(cronTimes.lunch)}`);
+    addLog('info', `  - Evening: ${formatTime(cronTimes.evening)}`);
+}
+
+// ============================================
+// RESCHEDULE ENDPOINT
+// ============================================
+
+app.post('/reschedule', async (req, res) => {
+    addLog('info', '🔄 Rescheduling cron jobs...');
     try {
-        await runScrape(addLog);
+        await scheduleCronJobs();
+        res.json({ success: true, message: 'Cron jobs rescheduled' });
     } catch (error: any) {
-        addLog('error', `Scrape cron failed: ${error.message}`);
+        addLog('error', `Reschedule failed: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
     }
-}, { timezone: 'UTC' });
-
-// 6:30 AM EAT = 3:30 AM UTC
-cron.schedule('30 3 * * *', async () => {
-    addLog('info', '⏰ Morning dispatch cron triggered (6:30 AM EAT)');
-
-    // Check if dispatch is enabled
-    const { getSystemSettings } = await import('./firebase');
-    const settings = await getSystemSettings();
-    if (!settings.dispatchEnabled) {
-        addLog('warning', '⏸️ Morning dispatch skipped - disabled in settings');
-        return;
-    }
-
-    if (dispatchInProgress) {
-        addLog('warning', 'Morning dispatch skipped - another dispatch in progress');
-        return;
-    }
-
-    dispatchInProgress = true;
-    currentDispatchWindow = 'morning';
-    try {
-        await runDispatch('morning', addLog);
-    } catch (error: any) {
-        addLog('error', `Morning dispatch failed: ${error.message}`);
-    } finally {
-        dispatchInProgress = false;
-        currentDispatchWindow = null;
-    }
-}, { timezone: 'UTC' });
-
-// 12:30 PM EAT = 9:30 AM UTC
-cron.schedule('30 9 * * *', async () => {
-    addLog('info', '⏰ Lunch dispatch cron triggered (12:30 PM EAT)');
-
-    // Check if dispatch is enabled
-    const { getSystemSettings } = await import('./firebase');
-    const settings = await getSystemSettings();
-    if (!settings.dispatchEnabled) {
-        addLog('warning', '⏸️ Lunch dispatch skipped - disabled in settings');
-        return;
-    }
-
-    if (dispatchInProgress) {
-        addLog('warning', 'Lunch dispatch skipped - another dispatch in progress');
-        return;
-    }
-
-    dispatchInProgress = true;
-    currentDispatchWindow = 'lunch';
-    try {
-        await runDispatch('lunch', addLog);
-    } catch (error: any) {
-        addLog('error', `Lunch dispatch failed: ${error.message}`);
-    } finally {
-        dispatchInProgress = false;
-        currentDispatchWindow = null;
-    }
-}, { timezone: 'UTC' });
-
-// 7:30 PM EAT = 4:30 PM UTC
-cron.schedule('30 16 * * *', async () => {
-    addLog('info', '⏰ Evening dispatch cron triggered (7:30 PM EAT)');
-
-    // Check if dispatch is enabled
-    const { getSystemSettings } = await import('./firebase');
-    const settings = await getSystemSettings();
-    if (!settings.dispatchEnabled) {
-        addLog('warning', '⏸️ Evening dispatch skipped - disabled in settings');
-        return;
-    }
-
-    if (dispatchInProgress) {
-        addLog('warning', 'Evening dispatch skipped - another dispatch in progress');
-        return;
-    }
-
-    dispatchInProgress = true;
-    currentDispatchWindow = 'evening';
-    try {
-        await runDispatch('evening', addLog);
-    } catch (error: any) {
-        addLog('error', `Evening dispatch failed: ${error.message}`);
-    } finally {
-        dispatchInProgress = false;
-        currentDispatchWindow = null;
-    }
-}, { timezone: 'UTC' });
+});
 
 // ============================================
 // STARTUP
@@ -345,13 +392,11 @@ async function start() {
         startedAt: new Date().toISOString()
     });
 
+    // Schedule cron jobs from settings
+    await scheduleCronJobs();
+
     app.listen(PORT, () => {
         addLog('info', `🚀 Worker server running on port ${PORT}`);
-        addLog('info', 'Cron jobs scheduled:');
-        addLog('info', '  - Scrape: 5:00 AM EAT');
-        addLog('info', '  - Morning dispatch: 6:30 AM EAT');
-        addLog('info', '  - Lunch dispatch: 12:30 PM EAT');
-        addLog('info', '  - Evening dispatch: 7:30 PM EAT');
     });
 }
 
@@ -359,3 +404,4 @@ start().catch((error) => {
     console.error('Failed to start worker:', error);
     process.exit(1);
 });
+

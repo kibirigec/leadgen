@@ -95,12 +95,32 @@ export async function getBotStatus(): Promise<string> {
 // SYSTEM SETTINGS
 // ============================================
 
+export interface CronTime {
+    hour: number;   // 0-23 (EAT)
+    minute: number; // 0-59
+}
+
 export interface SystemSettings {
     testMode: boolean;
     testPhone: string;
     scrapeEnabled: boolean;
     dispatchEnabled: boolean;
+    // Configurable cron times (EAT timezone)
+    cronTimes: {
+        scrape: CronTime;
+        morning: CronTime;
+        lunch: CronTime;
+        evening: CronTime;
+    };
 }
+
+// Default cron times (EAT)
+const DEFAULT_CRON_TIMES = {
+    scrape: { hour: 5, minute: 0 },
+    morning: { hour: 6, minute: 30 },
+    lunch: { hour: 12, minute: 30 },
+    evening: { hour: 19, minute: 30 },
+};
 
 // Cache for settings to avoid repeated reads
 let cachedSettings: SystemSettings | null = null;
@@ -123,11 +143,23 @@ export async function getSystemSettings(): Promise<SystemSettings> {
             testPhone: data?.testPhone ?? '',
             scrapeEnabled: data?.scrapeEnabled ?? true,
             dispatchEnabled: data?.dispatchEnabled ?? true,
+            cronTimes: {
+                scrape: data?.cronTimes?.scrape ?? DEFAULT_CRON_TIMES.scrape,
+                morning: data?.cronTimes?.morning ?? DEFAULT_CRON_TIMES.morning,
+                lunch: data?.cronTimes?.lunch ?? DEFAULT_CRON_TIMES.lunch,
+                evening: data?.cronTimes?.evening ?? DEFAULT_CRON_TIMES.evening,
+            },
         };
         settingsCacheTime = now;
         return cachedSettings;
     } catch {
-        return { testMode: false, testPhone: '', scrapeEnabled: true, dispatchEnabled: true };
+        return {
+            testMode: false,
+            testPhone: '',
+            scrapeEnabled: true,
+            dispatchEnabled: true,
+            cronTimes: DEFAULT_CRON_TIMES,
+        };
     }
 }
 
