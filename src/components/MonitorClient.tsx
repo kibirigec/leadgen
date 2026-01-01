@@ -91,6 +91,12 @@ export function MonitorClient() {
   const [showTestSettings, setShowTestSettings] = useState(false);
   const [testPhoneInput, setTestPhoneInput] = useState("");
 
+  // Time picker modal state
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [timePickerTarget, setTimePickerTarget] = useState<'scrape' | 'morning' | 'lunch' | 'evening'>('scrape');
+  const [timePickerHour, setTimePickerHour] = useState(5);
+  const [timePickerMinute, setTimePickerMinute] = useState(0);
+
   // Modal state
   const [selectedView, setSelectedView] = useState<'contacted' | 'pending' | 'reserve' | 'backlog' | null>(null);
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null);
@@ -735,13 +741,10 @@ export function MonitorClient() {
         <div className="grid grid-cols-4 gap-2 text-center">
           <button
             onClick={() => {
-              const currentHour = settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour;
-              const currentMinute = settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute;
-              const newHour = prompt('Enter hour (0-23):', String(currentHour));
-              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
-              if (newHour !== null && newMinute !== null) {
-                setCronTime('scrape', parseInt(newHour), parseInt(newMinute));
-              }
+              setTimePickerTarget('scrape');
+              setTimePickerHour(settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour);
+              setTimePickerMinute(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute);
+              setTimePickerOpen(true);
             }}
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-purple-500/50 transition-all ${settings.scrapeEnabled ? 'bg-purple-500/10' : 'bg-zinc-800/30'}`}
           >
@@ -752,13 +755,10 @@ export function MonitorClient() {
           </button>
           <button
             onClick={() => {
-              const currentHour = settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour;
-              const currentMinute = settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute;
-              const newHour = prompt('Enter hour (0-23):', String(currentHour));
-              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
-              if (newHour !== null && newMinute !== null) {
-                setCronTime('morning', parseInt(newHour), parseInt(newMinute));
-              }
+              setTimePickerTarget('morning');
+              setTimePickerHour(settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour);
+              setTimePickerMinute(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute);
+              setTimePickerOpen(true);
             }}
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-blue-500/50 transition-all ${settings.dispatchEnabled ? 'bg-blue-500/10' : 'bg-zinc-800/30'}`}
           >
@@ -769,13 +769,10 @@ export function MonitorClient() {
           </button>
           <button
             onClick={() => {
-              const currentHour = settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour;
-              const currentMinute = settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute;
-              const newHour = prompt('Enter hour (0-23):', String(currentHour));
-              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
-              if (newHour !== null && newMinute !== null) {
-                setCronTime('lunch', parseInt(newHour), parseInt(newMinute));
-              }
+              setTimePickerTarget('lunch');
+              setTimePickerHour(settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour);
+              setTimePickerMinute(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute);
+              setTimePickerOpen(true);
             }}
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-amber-500/50 transition-all ${settings.dispatchEnabled ? 'bg-amber-500/10' : 'bg-zinc-800/30'}`}
           >
@@ -786,13 +783,10 @@ export function MonitorClient() {
           </button>
           <button
             onClick={() => {
-              const currentHour = settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour;
-              const currentMinute = settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute;
-              const newHour = prompt('Enter hour (0-23):', String(currentHour));
-              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
-              if (newHour !== null && newMinute !== null) {
-                setCronTime('evening', parseInt(newHour), parseInt(newMinute));
-              }
+              setTimePickerTarget('evening');
+              setTimePickerHour(settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour);
+              setTimePickerMinute(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute);
+              setTimePickerOpen(true);
             }}
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-indigo-500/50 transition-all ${settings.dispatchEnabled ? 'bg-indigo-500/10' : 'bg-zinc-800/30'}`}
           >
@@ -855,6 +849,90 @@ export function MonitorClient() {
                 className="flex-1 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl disabled:opacity-50"
               >
                 {loading === 'testmode' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Enable'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Picker Modal */}
+      {timePickerOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 rounded-2xl p-6 max-w-sm w-full border border-zinc-800">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+              ⏰ Set {timePickerTarget.charAt(0).toUpperCase() + timePickerTarget.slice(1)} Time
+            </h3>
+            
+            {/* Time Display */}
+            <div className="text-center mb-6">
+              <div className="text-4xl font-mono font-bold text-zinc-100">
+                {String(timePickerHour).padStart(2, '0')}:{String(timePickerMinute).padStart(2, '0')}
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">EAT (UTC+3)</div>
+            </div>
+
+            {/* Hour Slider */}
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                <span>Hour</span>
+                <span>{timePickerHour}:00</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="23"
+                value={timePickerHour}
+                onChange={(e) => setTimePickerHour(parseInt(e.target.value))}
+                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
+                <span>12am</span>
+                <span>6am</span>
+                <span>12pm</span>
+                <span>6pm</span>
+                <span>11pm</span>
+              </div>
+            </div>
+
+            {/* Minute Slider */}
+            <div className="mb-6">
+              <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                <span>Minute</span>
+                <span>:{String(timePickerMinute).padStart(2, '0')}</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="59"
+                value={timePickerMinute}
+                onChange={(e) => setTimePickerMinute(parseInt(e.target.value))}
+                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
+                <span>:00</span>
+                <span>:15</span>
+                <span>:30</span>
+                <span>:45</span>
+                <span>:59</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setTimePickerOpen(false)}
+                className="flex-1 py-2 text-zinc-400 hover:bg-zinc-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await setCronTime(timePickerTarget, timePickerHour, timePickerMinute);
+                  setTimePickerOpen(false);
+                }}
+                disabled={loading === 'cron-time'}
+                className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl disabled:opacity-50"
+              >
+                Save
               </button>
             </div>
           </div>
