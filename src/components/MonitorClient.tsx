@@ -735,8 +735,10 @@ export function MonitorClient() {
         <div className="grid grid-cols-4 gap-2 text-center">
           <button
             onClick={() => {
-              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.scrape.hour));
-              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.scrape.minute));
+              const currentHour = settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour;
+              const currentMinute = settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute;
+              const newHour = prompt('Enter hour (0-23):', String(currentHour));
+              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
               if (newHour !== null && newMinute !== null) {
                 setCronTime('scrape', parseInt(newHour), parseInt(newMinute));
               }
@@ -744,14 +746,16 @@ export function MonitorClient() {
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-purple-500/50 transition-all ${settings.scrapeEnabled ? 'bg-purple-500/10' : 'bg-zinc-800/30'}`}
           >
             <div className={`text-xs font-bold ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-600'}`}>
-              {settings.cronTimes.scrape.hour}:{String(settings.cronTimes.scrape.minute).padStart(2, '0')}
+              {settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour}:{String(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute).padStart(2, '0')}
             </div>
             <div className="text-[10px] text-zinc-500">Scrape</div>
           </button>
           <button
             onClick={() => {
-              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.morning.hour));
-              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.morning.minute));
+              const currentHour = settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour;
+              const currentMinute = settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute;
+              const newHour = prompt('Enter hour (0-23):', String(currentHour));
+              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
               if (newHour !== null && newMinute !== null) {
                 setCronTime('morning', parseInt(newHour), parseInt(newMinute));
               }
@@ -759,14 +763,16 @@ export function MonitorClient() {
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-blue-500/50 transition-all ${settings.dispatchEnabled ? 'bg-blue-500/10' : 'bg-zinc-800/30'}`}
           >
             <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-600'}`}>
-              {settings.cronTimes.morning.hour}:{String(settings.cronTimes.morning.minute).padStart(2, '0')}
+              {settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour}:{String(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute).padStart(2, '0')}
             </div>
             <div className="text-[10px] text-zinc-500">Morning</div>
           </button>
           <button
             onClick={() => {
-              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.lunch.hour));
-              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.lunch.minute));
+              const currentHour = settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour;
+              const currentMinute = settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute;
+              const newHour = prompt('Enter hour (0-23):', String(currentHour));
+              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
               if (newHour !== null && newMinute !== null) {
                 setCronTime('lunch', parseInt(newHour), parseInt(newMinute));
               }
@@ -774,14 +780,16 @@ export function MonitorClient() {
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-amber-500/50 transition-all ${settings.dispatchEnabled ? 'bg-amber-500/10' : 'bg-zinc-800/30'}`}
           >
             <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-600'}`}>
-              {settings.cronTimes.lunch.hour}:{String(settings.cronTimes.lunch.minute).padStart(2, '0')}
+              {settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour}:{String(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute).padStart(2, '0')}
             </div>
             <div className="text-[10px] text-zinc-500">Lunch</div>
           </button>
           <button
             onClick={() => {
-              const newHour = prompt('Enter hour (0-23):', String(settings.cronTimes.evening.hour));
-              const newMinute = prompt('Enter minute (0-59):', String(settings.cronTimes.evening.minute));
+              const currentHour = settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour;
+              const currentMinute = settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute;
+              const newHour = prompt('Enter hour (0-23):', String(currentHour));
+              const newMinute = prompt('Enter minute (0-59):', String(currentMinute));
               if (newHour !== null && newMinute !== null) {
                 setCronTime('evening', parseInt(newHour), parseInt(newMinute));
               }
@@ -789,7 +797,7 @@ export function MonitorClient() {
             className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-indigo-500/50 transition-all ${settings.dispatchEnabled ? 'bg-indigo-500/10' : 'bg-zinc-800/30'}`}
           >
             <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-600'}`}>
-              {settings.cronTimes.evening.hour}:{String(settings.cronTimes.evening.minute).padStart(2, '0')}
+              {settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour}:{String(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute).padStart(2, '0')}
             </div>
             <div className="text-[10px] text-zinc-500">Evening</div>
           </button>
