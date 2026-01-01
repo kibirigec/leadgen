@@ -647,32 +647,48 @@ export function MonitorClient() {
         <div className="grid grid-cols-4 gap-2">
           <button
             onClick={handleTriggerScrape}
-            disabled={loading !== null}
-            className="flex flex-col items-center gap-1 p-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-xl disabled:opacity-50 transition-all"
+            disabled={loading !== null || !settings.scrapeEnabled}
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+              settings.scrapeEnabled 
+                ? 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-400' 
+                : 'bg-zinc-800/50 text-zinc-600'
+            }`}
           >
             {loading === 'scrape' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             <span className="text-[10px] font-medium">Scrape</span>
           </button>
           <button
             onClick={() => triggerDispatch('morning')}
-            disabled={loading !== null}
-            className="flex flex-col items-center gap-1 p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl disabled:opacity-50 transition-all"
+            disabled={loading !== null || !settings.dispatchEnabled}
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+              settings.dispatchEnabled 
+                ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' 
+                : 'bg-zinc-800/50 text-zinc-600'
+            }`}
           >
             {loading === 'dispatch-morning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">🌅</span>}
             <span className="text-[10px] font-medium">Morning</span>
           </button>
           <button
             onClick={() => triggerDispatch('lunch')}
-            disabled={loading !== null}
-            className="flex flex-col items-center gap-1 p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl disabled:opacity-50 transition-all"
+            disabled={loading !== null || !settings.dispatchEnabled}
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+              settings.dispatchEnabled 
+                ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400' 
+                : 'bg-zinc-800/50 text-zinc-600'
+            }`}
           >
             {loading === 'dispatch-lunch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">☀️</span>}
             <span className="text-[10px] font-medium">Lunch</span>
           </button>
           <button
             onClick={() => triggerDispatch('evening')}
-            disabled={loading !== null}
-            className="flex flex-col items-center gap-1 p-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl disabled:opacity-50 transition-all"
+            disabled={loading !== null || !settings.dispatchEnabled}
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+              settings.dispatchEnabled 
+                ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400' 
+                : 'bg-zinc-800/50 text-zinc-600'
+            }`}
           >
             {loading === 'dispatch-evening' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">🌙</span>}
             <span className="text-[10px] font-medium">Evening</span>
@@ -984,10 +1000,14 @@ export function MonitorClient() {
         {/* Start Button */}
         <button
           onClick={handleStart}
-          disabled={loading !== null || status.status === 'running' || status.status === 'paused'}
-          className="group flex flex-col items-center gap-2 bg-zinc-100 hover:bg-white text-zinc-950 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all shadow-lg shadow-white/5 active:scale-95"
+          disabled={loading !== null || status.status === 'running' || status.status === 'paused' || !settings.dispatchEnabled}
+          className={`group flex flex-col items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95 ${
+            settings.dispatchEnabled 
+              ? 'bg-zinc-100 hover:bg-white text-zinc-950 shadow-lg shadow-white/5' 
+              : 'bg-zinc-800/50 text-zinc-600'
+          }`}
         >
-          <Rocket className="w-5 h-5 group-hover:-translate-y-1 transition-transform text-black" />
+          <Rocket className="w-5 h-5 group-hover:-translate-y-1 transition-transform" />
           <span className="text-[10px] font-bold uppercase tracking-wide">Start</span>
         </button>
 
@@ -1039,8 +1059,12 @@ export function MonitorClient() {
               setTimeout(() => setLoading(null), 1000);
             }
           }}
-          disabled={loading !== null || leadStats.backlog === 0 || status.status === 'running'}
-          className="group flex flex-col items-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95"
+          disabled={loading !== null || leadStats.backlog === 0 || status.status === 'running' || !settings.dispatchEnabled}
+          className={`group flex flex-col items-center gap-2 border disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95 ${
+            settings.dispatchEnabled 
+              ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/20' 
+              : 'bg-zinc-800/50 text-zinc-600 border-zinc-700'
+          }`}
         >
           <Package className="w-5 h-5" />
           <span className="text-[10px] font-bold uppercase tracking-wide">Backlog</span>
