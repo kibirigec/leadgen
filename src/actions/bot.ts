@@ -102,15 +102,20 @@ export async function clearBotLogs() {
 }
 
 // ============================================
-// TEST MODE SETTINGS
+// SYSTEM SETTINGS
 // ============================================
 
-export interface TestSettings {
+export interface SystemSettings {
     testMode: boolean;
     testPhone: string;
+    scrapeEnabled: boolean;
+    dispatchEnabled: boolean;
 }
 
-export async function getSettings(): Promise<TestSettings> {
+// Backwards compatible alias
+export type TestSettings = SystemSettings;
+
+export async function getSettings(): Promise<SystemSettings> {
     try {
         const { db } = await import("@/lib/firebase");
         const doc = await db.collection("system").doc("settings").get();
@@ -118,10 +123,12 @@ export async function getSettings(): Promise<TestSettings> {
         return {
             testMode: data?.testMode ?? false,
             testPhone: data?.testPhone ?? "",
+            scrapeEnabled: data?.scrapeEnabled ?? true,
+            dispatchEnabled: data?.dispatchEnabled ?? true,
         };
     } catch (error) {
         console.error("Error fetching settings:", error);
-        return { testMode: false, testPhone: "" };
+        return { testMode: false, testPhone: "", scrapeEnabled: true, dispatchEnabled: true };
     }
 }
 
@@ -145,3 +152,44 @@ export async function setTestMode(enabled: boolean, testPhone: string) {
         return { success: false, error: error.message };
     }
 }
+
+export async function setScrapeEnabled(enabled: boolean) {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("settings").set({
+            scrapeEnabled: enabled,
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        await addBotLog(
+            enabled ? "info" : "warning",
+            enabled ? "🔄 Scrape enabled" : "⏸️ Scrape disabled"
+        );
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error updating scrape setting:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function setDispatchEnabled(enabled: boolean) {
+    try {
+        const { db } = await import("@/lib/firebase");
+        await db.collection("system").doc("settings").set({
+            dispatchEnabled: enabled,
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        await addBotLog(
+            enabled ? "info" : "warning",
+            enabled ? "📤 Dispatch enabled" : "⏸️ Dispatch disabled"
+        );
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error updating dispatch setting:", error);
+        return { success: false, error: error.message };
+    }
+}
+

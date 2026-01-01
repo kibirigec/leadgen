@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
-import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode } from "@/actions/bot";
+import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled } from "@/actions/bot";
 import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
@@ -38,9 +38,12 @@ interface WindowStats {
   evening: { pending: number; sent: number };
 }
 
-interface TestSettings {
+
+interface SystemSettings {
   testMode: boolean;
   testPhone: string;
+  scrapeEnabled: boolean;
+  dispatchEnabled: boolean;
 }
 
 export function MonitorClient() {
@@ -59,8 +62,8 @@ export function MonitorClient() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
 
-  // Test mode state
-  const [testSettings, setTestSettings] = useState<TestSettings>({ testMode: false, testPhone: "" });
+  // Settings state
+  const [settings, setSettings] = useState<SystemSettings>({ testMode: false, testPhone: "", scrapeEnabled: true, dispatchEnabled: true });
   const [showTestSettings, setShowTestSettings] = useState(false);
   const [testPhoneInput, setTestPhoneInput] = useState("");
 
@@ -291,9 +294,11 @@ export function MonitorClient() {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          setTestSettings({
+          setSettings({
             testMode: data.testMode ?? false,
-            testPhone: data.testPhone ?? ""
+            testPhone: data.testPhone ?? "",
+            scrapeEnabled: data.scrapeEnabled ?? true,
+            dispatchEnabled: data.dispatchEnabled ?? true,
           });
           setTestPhoneInput(data.testPhone ?? "");
         }
@@ -407,11 +412,11 @@ export function MonitorClient() {
   };
 
   const handleToggleTestMode = async () => {
-    if (testSettings.testMode) {
+    if (settings.testMode) {
       // Disable test mode
       setLoading('testmode');
       try {
-        await setTestMode(false, testSettings.testPhone);
+        await setTestMode(false, settings.testPhone);
         setShowTestSettings(false);
       } catch (err: any) {
         setError(err.message || 'Failed to update');
@@ -572,12 +577,12 @@ export function MonitorClient() {
       )}
 
       {/* Test Mode Banner */}
-      {testSettings.testMode && (
+      {settings.testMode && (
         <div className="mb-4 bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 flex items-center gap-3">
           <FlaskConical className="w-5 h-5 text-orange-400" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-orange-400">🧪 TEST MODE ACTIVE</p>
-            <p className="text-xs text-orange-400/70">Messages → {testSettings.testPhone}</p>
+            <p className="text-xs text-orange-400/70">Messages → {settings.testPhone}</p>
           </div>
           <button 
             onClick={handleToggleTestMode}
@@ -592,17 +597,52 @@ export function MonitorClient() {
       <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Manual Triggers</span>
-          <button
-            onClick={handleToggleTestMode}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
-              testSettings.testMode 
-                ? 'bg-orange-500/20 text-orange-400' 
-                : 'bg-white/5 text-zinc-400 hover:bg-white/10'
-            }`}
-          >
-            <FlaskConical className="w-3 h-3" />
-            {testSettings.testMode ? 'Test On' : 'Test Off'}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Scrape Toggle */}
+            <button
+              onClick={async () => {
+                setLoading('scrape-toggle');
+                await setScrapeEnabled(!settings.scrapeEnabled);
+                setLoading(null);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${
+                settings.scrapeEnabled 
+                  ? 'bg-purple-500/20 text-purple-400' 
+                  : 'bg-zinc-700/50 text-zinc-500'
+              }`}
+            >
+              <Zap className="w-3 h-3" />
+              {settings.scrapeEnabled ? 'Scrape On' : 'Scrape Off'}
+            </button>
+            {/* Dispatch Toggle */}
+            <button
+              onClick={async () => {
+                setLoading('dispatch-toggle');
+                await setDispatchEnabled(!settings.dispatchEnabled);
+                setLoading(null);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${
+                settings.dispatchEnabled 
+                  ? 'bg-blue-500/20 text-blue-400' 
+                  : 'bg-zinc-700/50 text-zinc-500'
+              }`}
+            >
+              <Rocket className="w-3 h-3" />
+              {settings.dispatchEnabled ? 'Dispatch On' : 'Dispatch Off'}
+            </button>
+            {/* Test Mode Toggle */}
+            <button
+              onClick={handleToggleTestMode}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
+                settings.testMode 
+                  ? 'bg-orange-500/20 text-orange-400' 
+                  : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+              }`}
+            >
+              <FlaskConical className="w-3 h-3" />
+              {settings.testMode ? 'Test On' : 'Test Off'}
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-4 gap-2">
           <button

@@ -92,46 +92,56 @@ export async function getBotStatus(): Promise<string> {
 }
 
 // ============================================
-// TEST MODE SETTINGS
+// SYSTEM SETTINGS
 // ============================================
 
-export interface TestSettings {
+export interface SystemSettings {
     testMode: boolean;
     testPhone: string;
+    scrapeEnabled: boolean;
+    dispatchEnabled: boolean;
 }
 
-// Cache for test settings to avoid repeated reads
-let cachedTestSettings: TestSettings | null = null;
-let testSettingsCacheTime = 0;
+// Cache for settings to avoid repeated reads
+let cachedSettings: SystemSettings | null = null;
+let settingsCacheTime = 0;
 const CACHE_TTL_MS = 10000; // 10 seconds
 
-export async function getTestSettings(): Promise<TestSettings> {
+export async function getSystemSettings(): Promise<SystemSettings> {
     const now = Date.now();
 
     // Return cached if still valid
-    if (cachedTestSettings && (now - testSettingsCacheTime) < CACHE_TTL_MS) {
-        return cachedTestSettings;
+    if (cachedSettings && (now - settingsCacheTime) < CACHE_TTL_MS) {
+        return cachedSettings;
     }
 
     try {
         const doc = await db.collection('system').doc('settings').get();
         const data = doc.data();
-        cachedTestSettings = {
+        cachedSettings = {
             testMode: data?.testMode ?? false,
             testPhone: data?.testPhone ?? '',
+            scrapeEnabled: data?.scrapeEnabled ?? true,
+            dispatchEnabled: data?.dispatchEnabled ?? true,
         };
-        testSettingsCacheTime = now;
-        return cachedTestSettings;
+        settingsCacheTime = now;
+        return cachedSettings;
     } catch {
-        return { testMode: false, testPhone: '' };
+        return { testMode: false, testPhone: '', scrapeEnabled: true, dispatchEnabled: true };
     }
 }
 
+// Backwards compatible alias
+export const getTestSettings = getSystemSettings;
+
 // Clear cache (call when settings change)
-export function clearTestSettingsCache(): void {
-    cachedTestSettings = null;
-    testSettingsCacheTime = 0;
+export function clearSettingsCache(): void {
+    cachedSettings = null;
+    settingsCacheTime = 0;
 }
+
+// Backwards compatible alias
+export const clearTestSettingsCache = clearSettingsCache;
 
 /**
  * Get collection reference with optional test_ prefix
@@ -141,7 +151,7 @@ export function getCollection(name: string): admin.firestore.CollectionReference
     if (!db) throw new Error('Firebase not initialized');
 
     // Use cached testMode (sync check for performance)
-    const prefix = cachedTestSettings?.testMode ? 'test_' : '';
+    const prefix = cachedSettings?.testMode ? 'test_' : '';
     return db.collection(`${prefix}${name}`);
 }
 

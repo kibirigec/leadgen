@@ -5,7 +5,7 @@
  */
 
 import puppeteer from 'puppeteer-extra';
-import type { Browser, Page } from 'puppeteer';
+// import type { Browser, Page } from 'puppeteer';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import os from 'os';
 import path from 'path';

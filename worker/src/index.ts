@@ -229,6 +229,15 @@ app.post('/trigger/test-telegram', async (req, res) => {
 // 5:00 AM EAT = 2:00 AM UTC - Daily scrape (300 leads)
 cron.schedule('0 2 * * *', async () => {
     addLog('info', '⏰ Scrape cron triggered (5:00 AM EAT)');
+
+    // Check if scrape is enabled
+    const { getSystemSettings } = await import('./firebase');
+    const settings = await getSystemSettings();
+    if (!settings.scrapeEnabled) {
+        addLog('warning', '⏸️ Scrape skipped - disabled in settings');
+        return;
+    }
+
     try {
         await runScrape(addLog);
     } catch (error: any) {
@@ -239,6 +248,14 @@ cron.schedule('0 2 * * *', async () => {
 // 6:30 AM EAT = 3:30 AM UTC
 cron.schedule('30 3 * * *', async () => {
     addLog('info', '⏰ Morning dispatch cron triggered (6:30 AM EAT)');
+
+    // Check if dispatch is enabled
+    const { getSystemSettings } = await import('./firebase');
+    const settings = await getSystemSettings();
+    if (!settings.dispatchEnabled) {
+        addLog('warning', '⏸️ Morning dispatch skipped - disabled in settings');
+        return;
+    }
 
     if (dispatchInProgress) {
         addLog('warning', 'Morning dispatch skipped - another dispatch in progress');
@@ -261,6 +278,14 @@ cron.schedule('30 3 * * *', async () => {
 cron.schedule('30 9 * * *', async () => {
     addLog('info', '⏰ Lunch dispatch cron triggered (12:30 PM EAT)');
 
+    // Check if dispatch is enabled
+    const { getSystemSettings } = await import('./firebase');
+    const settings = await getSystemSettings();
+    if (!settings.dispatchEnabled) {
+        addLog('warning', '⏸️ Lunch dispatch skipped - disabled in settings');
+        return;
+    }
+
     if (dispatchInProgress) {
         addLog('warning', 'Lunch dispatch skipped - another dispatch in progress');
         return;
@@ -281,6 +306,14 @@ cron.schedule('30 9 * * *', async () => {
 // 7:30 PM EAT = 4:30 PM UTC
 cron.schedule('30 16 * * *', async () => {
     addLog('info', '⏰ Evening dispatch cron triggered (7:30 PM EAT)');
+
+    // Check if dispatch is enabled
+    const { getSystemSettings } = await import('./firebase');
+    const settings = await getSystemSettings();
+    if (!settings.dispatchEnabled) {
+        addLog('warning', '⏸️ Evening dispatch skipped - disabled in settings');
+        return;
+    }
 
     if (dispatchInProgress) {
         addLog('warning', 'Evening dispatch skipped - another dispatch in progress');
