@@ -309,32 +309,86 @@ export async function runWhatsAppBot(
                     continue;
                 }
 
-                // Send
+                // Send with verification
                 console.log(`[DEBUG] Found input, ensuring focus...`);
-                // Take debug screenshot BEFORE sending to verify text presence
                 await page.screenshot({ path: `/tmp/pre_send_${lead.id}_${i}.png` });
 
-                // Method 1: Focus and Press Enter
-                await page.click(foundSelector); // Explicit click to focus
+                // Click to ensure focus
+                await page.click(foundSelector);
                 await new Promise(r => setTimeout(r, 500));
-                await page.keyboard.press('Enter');
 
-                // Method 2: Click Send Button (Backup)
-                try {
-                    const sendButtonSelector = 'span[data-icon="send"], button[aria-label="Send"]';
-                    await page.waitForSelector(sendButtonSelector, { timeout: 2000 });
-                    await page.click(sendButtonSelector);
-                    console.log(`[DEBUG] Clicked Send button fallback`);
-                } catch (e) {
-                    console.log(`[DEBUG] Send button not found or Enter already worked`);
+                // Try sending with verification (up to 3 attempts)
+                let messageSent = false;
+                const sendButtonSelector = 'span[data-icon="send"], button[aria-label="Send"]';
+
+                for (let sendAttempt = 1; sendAttempt <= 3 && !messageSent; sendAttempt++) {
+                    console.log(`[DEBUG] Send attempt ${sendAttempt}/3...`);
+
+                    // Method 1: Press Enter
+                    await page.keyboard.press('Enter');
+                    await new Promise(r => setTimeout(r, 1500));
+
+                    // Method 2: Click Send Button if still visible
+                    try {
+                        const sendBtn = await page.$(sendButtonSelector);
+                        if (sendBtn) {
+                            await sendBtn.click();
+                            console.log(`[DEBUG] Clicked Send button`);
+                            await new Promise(r => setTimeout(r, 1500));
+                        }
+                    } catch { }
+
+                    // VERIFICATION: Check if message was sent
+                    // The input should be empty after successful send
+                    const inputContent = await page.evaluate((sel: string) => {
+                        const el = document.querySelector(sel);
+                        return el ? el.textContent?.trim() || '' : 'NOT_FOUND';
+                    }, foundSelector);
+
+                    console.log(`[DEBUG] Input content after send: "${inputContent.substring(0, 30)}..."`);
+
+                    // If input is empty or very short, message was likely sent
+                    if (inputContent === '' || inputContent.length < 10) {
+                        // Additional check: Look for outgoing message bubble with checkmark
+                        const hasCheckmark = await page.evaluate(() => {
+                            const msgOut = document.querySelector('[data-icon="msg-check"], [data-icon="msg-dblcheck"], [data-icon="msg-time"]');
+                            return !!msgOut;
+                        });
+
+                        if (hasCheckmark || inputContent === '') {
+                            messageSent = true;
+                            console.log(`[DEBUG] ✓ Message verified as sent`);
+                        }
+                    }
+
+                    // Check for error popups
+                    const pageContent = await page.content();
+                    if (pageContent.includes('Phone number shared via url is invalid') ||
+                        pageContent.includes('phone number isn\'t on WhatsApp')) {
+                        console.log(`[DEBUG] ✗ Error popup detected - number invalid/not on WhatsApp`);
+                        log('warning', `  ⚠️ ${lead.name}: Number not on WhatsApp`);
+                        await addBotLog('warning', `${lead.name}: Number not on WhatsApp`);
+                        break; // Don't retry, skip this lead
+                    }
+
+                    if (!messageSent && sendAttempt < 3) {
+                        console.log(`[DEBUG] Retrying send...`);
+                        // Re-click input to ensure focus
+                        await page.click(foundSelector);
+                        await new Promise(r => setTimeout(r, 500));
+                    }
                 }
 
-                await new Promise(r => setTimeout(r, 2000));
-
-                sentCount++;
-                contactedLeadIds.push(lead.id);
-                log('info', `✅ Sent to ${lead.name}`);
-                await addBotLog('info', `Sent to ${lead.name}`);
+                if (messageSent) {
+                    sentCount++;
+                    contactedLeadIds.push(lead.id);
+                    log('info', `✅ Sent to ${lead.name}`);
+                    await addBotLog('info', `Sent to ${lead.name}`);
+                } else {
+                    log('warning', `  ⚠️ Could not verify send for ${lead.name}`);
+                    await addBotLog('warning', `Failed to verify send for ${lead.name}`);
+                    errorCount++;
+                }
 
                 const delay = 30000 + Math.floor(Math.random() * 30000);
                 log('info', `⏳ Waiting ${Math.round(delay / 1000)}s...`);
