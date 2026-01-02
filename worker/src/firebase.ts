@@ -11,12 +11,26 @@ import fs from 'fs';
 let db: admin.firestore.Firestore;
 
 export async function initializeFirebase(): Promise<void> {
-    // Try to load service account from file or env var
-    const serviceAccountPath = path.resolve(__dirname, '../../firebase-service-account.json');
+    // Try multiple paths for service account file
+    const possiblePaths = [
+        path.resolve(__dirname, '../../../firebase-service-account.json'),  // From dist/worker/src -> worker/
+        path.resolve(__dirname, '../../../../firebase-service-account.json'), // From dist/worker/src -> project root
+        path.resolve(process.cwd(), 'firebase-service-account.json'),  // Current working directory
+        path.resolve(process.cwd(), '../firebase-service-account.json'), // Parent of cwd
+    ];
 
     let credential: admin.credential.Credential;
+    let serviceAccountPath: string | null = null;
 
-    if (fs.existsSync(serviceAccountPath)) {
+    // Find service account file
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            serviceAccountPath = p;
+            break;
+        }
+    }
+
+    if (serviceAccountPath) {
         const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
         credential = admin.credential.cert(serviceAccount);
     } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
