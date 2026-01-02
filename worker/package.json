@@ -2,11 +2,11 @@
     "name": "leadgen-worker",
     "version": "1.0.0",
     "description": "WhatsApp outreach worker - scraping and dispatch crons",
-    "main": "dist/index.js",
+    "main": "dist/worker/src/index.js",
     "scripts": {
         "dev": "tsx watch src/index.ts",
         "build": "tsc",
-        "start": "HEADLESS=false xvfb-run --auto-servernum --server-args='-screen 0 1280x960x24' node dist/index.js",
+        "start": "HEADLESS=false xvfb-run --auto-servernum --server-args='-screen 0 1280x960x24' node dist/worker/src/index.js",
         "seed:mock": "tsx src/scripts/seed-mock-data.ts"
     },
     "dependencies": {
