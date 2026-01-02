@@ -13,9 +13,22 @@ import cors from 'cors';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
-// Load environment variables from parent directory
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// Try multiple paths for .env file
+const envPaths = [
+    path.resolve(process.cwd(), '.env'),  // Current working directory
+    path.resolve(__dirname, '../../../.env'),  // worker/.env from dist/worker/src
+    path.resolve(__dirname, '../../../../.env'),  // project root from dist/worker/src
+];
+
+for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+        console.log(`Loaded .env from: ${envPath}`);
+        break;
+    }
+}
 
 import { initializeFirebase, getWorkerStatus, updateWorkerStatus } from './firebase';
 import { runScrape } from './scrape-runner';
