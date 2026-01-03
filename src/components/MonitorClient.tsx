@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled, setCronTime } from "@/actions/bot";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock, ChevronUp, ChevronDown } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
 
@@ -949,11 +949,17 @@ export function MonitorClient() {
               </button>
             </div>
             
-            <div className="flex items-center justify-center gap-4 mb-8">
+            <div className="flex items-center justify-center gap-6 mb-8">
               {/* Hour Input */}
-              <div className="flex flex-col items-center gap-2">
-                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Hour</label>
-                <div className="relative group">
+              <div className="flex flex-col items-center gap-1">
+                <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Hour</label>
+                <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setTimePickerHour(h => h < 23 ? h + 1 : 0)}
+                    className="p-1 hover:bg-white/10 text-zinc-500 hover:text-zinc-300 rounded-full transition-colors mb-1"
+                  >
+                    <ChevronUp className="w-6 h-6" />
+                  </button>
                   <input
                     type="number"
                     min="0"
@@ -963,31 +969,29 @@ export function MonitorClient() {
                       const val = parseInt(e.target.value);
                       if (!isNaN(val) && val >= 0 && val <= 23) setTimePickerHour(val);
                     }}
-                    className="w-20 h-24 bg-zinc-800/50 rounded-2xl text-center text-4xl font-light text-white border border-white/5 focus:border-blue-500/50 focus:bg-zinc-800 transition-all outline-none"
+                    className="w-20 h-20 bg-zinc-800/50 rounded-2xl text-center text-5xl font-light text-white border border-white/5 focus:border-blue-500/50 focus:bg-zinc-800 transition-all outline-none appearance-none"
                   />
-                  <div className="absolute inset-x-0 -bottom-6 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => setTimePickerHour(h => h > 0 ? h - 1 : 23)}
-                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
-                    >
-                      <img src="/icons/minus.svg" className="w-4 h-4 hidden" alt="" />-
-                    </button>
-                    <button 
-                      onClick={() => setTimePickerHour(h => h < 23 ? h + 1 : 0)}
-                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
-                    >
-                      +
-                    </button>
-                  </div>
+                  <button 
+                    onClick={() => setTimePickerHour(h => h > 0 ? h - 1 : 23)}
+                    className="p-1 hover:bg-white/10 text-zinc-500 hover:text-zinc-300 rounded-full transition-colors mt-1"
+                  >
+                    <ChevronDown className="w-6 h-6" />
+                  </button>
                 </div>
               </div>
 
-              <div className="text-4xl font-light text-zinc-600 pb-6">:</div>
+              <div className="text-4xl font-light text-zinc-600 self-center pt-6">:</div>
 
               {/* Minute Input */}
-              <div className="flex flex-col items-center gap-2">
-                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Minute</label>
-                <div className="relative group">
+              <div className="flex flex-col items-center gap-1">
+                <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">Minute</label>
+                 <div className="flex flex-col items-center">
+                  <button 
+                    onClick={() => setTimePickerMinute(m => m < 59 ? m + 1 : 0)}
+                    className="p-1 hover:bg-white/10 text-zinc-500 hover:text-zinc-300 rounded-full transition-colors mb-1"
+                  >
+                    <ChevronUp className="w-6 h-6" />
+                  </button>
                   <input
                     type="number"
                     min="0"
@@ -997,22 +1001,14 @@ export function MonitorClient() {
                       const val = parseInt(e.target.value);
                       if (!isNaN(val) && val >= 0 && val <= 59) setTimePickerMinute(val);
                     }}
-                    className="w-20 h-24 bg-zinc-800/50 rounded-2xl text-center text-4xl font-light text-white border border-white/5 focus:border-blue-500/50 focus:bg-zinc-800 transition-all outline-none"
+                    className="w-20 h-20 bg-zinc-800/50 rounded-2xl text-center text-5xl font-light text-white border border-white/5 focus:border-blue-500/50 focus:bg-zinc-800 transition-all outline-none appearance-none"
                   />
-                   <div className="absolute inset-x-0 -bottom-6 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => setTimePickerMinute(m => m > 0 ? m - 1 : 59)}
-                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
-                    >
-                      -
-                    </button>
-                    <button 
-                      onClick={() => setTimePickerMinute(m => m < 59 ? m + 1 : 0)}
-                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
-                    >
-                      +
-                    </button>
-                  </div>
+                  <button 
+                    onClick={() => setTimePickerMinute(m => m > 0 ? m - 1 : 59)}
+                    className="p-1 hover:bg-white/10 text-zinc-500 hover:text-zinc-300 rounded-full transition-colors mt-1"
+                  >
+                    <ChevronDown className="w-6 h-6" />
+                  </button>
                 </div>
               </div>
             </div>
