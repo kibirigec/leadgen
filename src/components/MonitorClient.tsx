@@ -573,6 +573,22 @@ export function MonitorClient() {
     }
   };
 
+  const handleDispatchBacklog = async () => {
+    if (leadStats.backlog === 0) return;
+    setLoading('backlog');
+    try {
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+      const response = await fetch(`${workerUrl}/trigger/dispatch-backlog`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setTimeout(() => setLoading(null), 1000);
+    }
+  };
+
   const getStatusColor = () => {
     switch (status.status) {
       case "running": return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]";
@@ -911,13 +927,17 @@ export function MonitorClient() {
             <span className="text-[10px] font-bold tracking-wider">STOP</span>
           </button>
 
-          {/* Backlog (Clear Logs) Button */}
+          {/* Backlog (Dispatch Backlog) Button */}
           <button
-            onClick={handleClearLogs}
-            disabled={loading !== null}
-            className="group relative flex items-center justify-center gap-2 p-3 rounded-xl border bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300 disabled:opacity-50"
+            onClick={handleDispatchBacklog}
+            disabled={loading !== null || leadStats.backlog === 0 || status.status === 'running' || !settings.dispatchEnabled}
+             className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
+               settings.dispatchEnabled && leadStats.backlog > 0
+                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 hover:bg-orange-500/20 hover:border-orange-500/30'
+                : 'bg-zinc-800/50 text-zinc-600 border-zinc-700/50 hover:bg-zinc-800'
+             }`}
           >
-            {loading === 'clear' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            {loading === 'backlog' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4 fill-current opacity-70" />}
             <span className="text-[10px] font-bold tracking-wider">BACKLOG</span>
           </button>
         </div>
@@ -1377,24 +1397,10 @@ export function MonitorClient() {
 
         {/* Dispatch Backlog Button */}
         <button
-          onClick={async () => {
-            if (leadStats.backlog === 0) return;
-            setLoading('backlog');
-            try {
-              const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-              const response = await fetch(`${workerUrl}/trigger/dispatch-backlog`, { method: 'POST' });
-              const data = await response.json();
-              if (!response.ok) throw new Error(data.error || 'Failed');
-              setError(null);
-            } catch (err: any) {
-              setError(err.message);
-            } finally {
-              setTimeout(() => setLoading(null), 1000);
-            }
-          }}
+          onClick={handleDispatchBacklog}
           disabled={loading !== null || leadStats.backlog === 0 || status.status === 'running' || !settings.dispatchEnabled}
           className={`group flex flex-col items-center gap-2 border disabled:opacity-30 disabled:cursor-not-allowed p-4 rounded-2xl transition-all active:scale-95 ${
-            settings.dispatchEnabled 
+            settings.dispatchEnabled && leadStats.backlog > 0
               ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/20' 
               : 'bg-zinc-800/50 text-zinc-600 border-zinc-700'
           }`}
