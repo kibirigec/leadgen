@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled, setCronTime } from "@/actions/bot";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
 
@@ -680,65 +680,79 @@ export function MonitorClient() {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-3">
           <button
             onClick={handleTriggerScrape}
             disabled={loading !== null || !settings.scrapeEnabled}
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
               settings.scrapeEnabled 
-                ? 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-400' 
-                : 'bg-zinc-800/50 text-zinc-600'
+                ? 'bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/30 text-purple-400' 
+                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
             }`}
           >
-            {loading === 'scrape' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            <span className="text-[10px] font-medium">Scrape</span>
+            <div className={`p-2 rounded-full ${settings.scrapeEnabled ? 'bg-purple-500/20 group-hover:bg-purple-500/30' : 'bg-zinc-800'} transition-colors`}>
+              {loading === 'scrape' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            </div>
+            <span className="text-[10px] font-medium tracking-wide">SCRAPE</span>
           </button>
+
           <button
             onClick={() => triggerDispatch('morning')}
             disabled={loading !== null || !settings.dispatchEnabled}
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
               settings.dispatchEnabled 
-                ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' 
-                : 'bg-zinc-800/50 text-zinc-600'
+                ? 'bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 text-blue-400' 
+                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
             }`}
           >
-            {loading === 'dispatch-morning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">🌅</span>}
-            <span className="text-[10px] font-medium">Morning</span>
+            <div className={`p-2 rounded-full ${settings.dispatchEnabled ? 'bg-blue-500/20 group-hover:bg-blue-500/30' : 'bg-zinc-800'} transition-colors`}>
+              {loading === 'dispatch-morning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sunrise className="w-4 h-4" />}
+            </div>
+            <span className="text-[10px] font-medium tracking-wide">MORNING</span>
           </button>
+
           <button
             onClick={() => triggerDispatch('lunch')}
             disabled={loading !== null || !settings.dispatchEnabled}
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
               settings.dispatchEnabled 
-                ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400' 
-                : 'bg-zinc-800/50 text-zinc-600'
+                ? 'bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/30 text-amber-400' 
+                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
             }`}
           >
-            {loading === 'dispatch-lunch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">☀️</span>}
-            <span className="text-[10px] font-medium">Lunch</span>
+            <div className={`p-2 rounded-full ${settings.dispatchEnabled ? 'bg-amber-500/20 group-hover:bg-amber-500/30' : 'bg-zinc-800'} transition-colors`}>
+              {loading === 'dispatch-lunch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sun className="w-4 h-4" />}
+            </div>
+            <span className="text-[10px] font-medium tracking-wide">LUNCH</span>
           </button>
+
           <button
             onClick={() => triggerDispatch('evening')}
             disabled={loading !== null || !settings.dispatchEnabled}
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl disabled:opacity-50 transition-all ${
+            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
               settings.dispatchEnabled 
-                ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400' 
-                : 'bg-zinc-800/50 text-zinc-600'
+                ? 'bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20 hover:border-indigo-500/30 text-indigo-400' 
+                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
             }`}
           >
-            {loading === 'dispatch-evening' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">🌙</span>}
-            <span className="text-[10px] font-medium">Evening</span>
+            <div className={`p-2 rounded-full ${settings.dispatchEnabled ? 'bg-indigo-500/20 group-hover:bg-indigo-500/30' : 'bg-zinc-800'} transition-colors`}>
+              {loading === 'dispatch-evening' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Moon className="w-4 h-4" />}
+            </div>
+            <span className="text-[10px] font-medium tracking-wide">EVENING</span>
           </button>
         </div>
       </div>
 
       {/* Cron Schedule */}
-      <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Automated Schedule (EAT)</span>
-          <span className="text-[10px] text-zinc-600">Click to edit</span>
+      <div className="mb-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-zinc-400" />
+            <span className="text-xs text-zinc-300 font-semibold uppercase tracking-wider">Automated Schedule (EAT)</span>
+          </div>
+          <span className="text-[10px] text-zinc-500 bg-zinc-800/50 px-2 py-0.5 rounded-full">Click time to edit</span>
         </div>
-        <div className="grid grid-cols-4 gap-2 text-center">
+        <div className="grid grid-cols-4 gap-3 mb-4">
           <button
             onClick={() => {
               setTimePickerTarget('scrape');
@@ -746,13 +760,21 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute);
               setTimePickerOpen(true);
             }}
-            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-purple-500/50 transition-all ${settings.scrapeEnabled ? 'bg-purple-500/10' : 'bg-zinc-800/30'}`}
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+              settings.scrapeEnabled 
+                ? 'bg-zinc-900 border-purple-500/30 hover:border-purple-500/60 shadow-[0_0_15px_-3px_rgba(168,85,247,0.15)]' 
+                : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+            }`}
           >
-            <div className={`text-xs font-bold ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-600'}`}>
+            <div className={`text-lg font-mono font-bold mb-1 ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour}:{String(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute).padStart(2, '0')}
             </div>
-            <div className="text-[10px] text-zinc-500">Scrape</div>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${settings.scrapeEnabled ? 'bg-purple-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.scrapeEnabled ? 'text-purple-300' : 'text-zinc-600'}`}>Scrape</span>
+            </div>
           </button>
+
           <button
             onClick={() => {
               setTimePickerTarget('morning');
@@ -760,13 +782,21 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute);
               setTimePickerOpen(true);
             }}
-            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-blue-500/50 transition-all ${settings.dispatchEnabled ? 'bg-blue-500/10' : 'bg-zinc-800/30'}`}
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+              settings.dispatchEnabled 
+                ? 'bg-zinc-900 border-blue-500/30 hover:border-blue-500/60 shadow-[0_0_15px_-3px_rgba(59,130,246,0.15)]' 
+                : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+            }`}
           >
-            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-600'}`}>
+            <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour}:{String(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute).padStart(2, '0')}
             </div>
-            <div className="text-[10px] text-zinc-500">Morning</div>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-blue-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-blue-300' : 'text-zinc-600'}`}>Morning</span>
+            </div>
           </button>
+
           <button
             onClick={() => {
               setTimePickerTarget('lunch');
@@ -774,13 +804,21 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute);
               setTimePickerOpen(true);
             }}
-            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-amber-500/50 transition-all ${settings.dispatchEnabled ? 'bg-amber-500/10' : 'bg-zinc-800/30'}`}
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+              settings.dispatchEnabled 
+                ? 'bg-zinc-900 border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_15px_-3px_rgba(245,158,11,0.15)]' 
+                : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+            }`}
           >
-            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-600'}`}>
+            <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour}:{String(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute).padStart(2, '0')}
             </div>
-            <div className="text-[10px] text-zinc-500">Lunch</div>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-amber-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-amber-300' : 'text-zinc-600'}`}>Lunch</span>
+            </div>
           </button>
+
           <button
             onClick={() => {
               setTimePickerTarget('evening');
@@ -788,14 +826,22 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute);
               setTimePickerOpen(true);
             }}
-            className={`p-2 rounded-lg cursor-pointer hover:ring-1 hover:ring-indigo-500/50 transition-all ${settings.dispatchEnabled ? 'bg-indigo-500/10' : 'bg-zinc-800/30'}`}
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+              settings.dispatchEnabled 
+                ? 'bg-zinc-900 border-indigo-500/30 hover:border-indigo-500/60 shadow-[0_0_15px_-3px_rgba(99,102,241,0.15)]' 
+                : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+            }`}
           >
-            <div className={`text-xs font-bold ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-600'}`}>
+            <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour}:{String(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute).padStart(2, '0')}
             </div>
-            <div className="text-[10px] text-zinc-500">Evening</div>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-indigo-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-indigo-300' : 'text-zinc-600'}`}>Evening</span>
+            </div>
           </button>
         </div>
+
         {/* Reschedule button */}
         <button
           onClick={async () => {
@@ -810,9 +856,20 @@ export function MonitorClient() {
             }
           }}
           disabled={loading !== null}
-          className="mt-2 w-full text-center text-xs text-zinc-500 hover:text-zinc-300 py-1 rounded hover:bg-white/5 transition-all"
+          className="w-full relative group overflow-hidden bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 p-3 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading === 'reschedule' ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : '🔄 Apply Changes (Reschedule Worker)'}
+          <div className="flex items-center justify-center gap-2">
+            {loading === 'reschedule' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+            )}
+            <span className="text-sm font-semibold tracking-wide">
+              {loading === 'reschedule' ? 'APPLYING CHANGES...' : 'APPLY SCHEDULE CHANGES'}
+            </span>
+          </div>
+          {/* Subtle shine effect */}
+          <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </button>
       </div>
 
