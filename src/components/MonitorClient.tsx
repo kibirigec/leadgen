@@ -760,7 +760,7 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute);
               setTimePickerOpen(true);
             }}
-            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
               settings.scrapeEnabled 
                 ? 'bg-zinc-900 border-purple-500/30 hover:border-purple-500/60 shadow-[0_0_15px_-3px_rgba(168,85,247,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
@@ -769,7 +769,7 @@ export function MonitorClient() {
             <div className={`text-lg font-mono font-bold mb-1 ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour}:{String(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute).padStart(2, '0')}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full ${settings.scrapeEnabled ? 'bg-purple-500 animate-pulse' : 'bg-zinc-700'}`} />
               <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.scrapeEnabled ? 'text-purple-300' : 'text-zinc-600'}`}>Scrape</span>
             </div>
@@ -782,7 +782,7 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute);
               setTimePickerOpen(true);
             }}
-            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
               settings.dispatchEnabled 
                 ? 'bg-zinc-900 border-blue-500/30 hover:border-blue-500/60 shadow-[0_0_15px_-3px_rgba(59,130,246,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
@@ -791,7 +791,7 @@ export function MonitorClient() {
             <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour}:{String(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute).padStart(2, '0')}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-blue-500 animate-pulse' : 'bg-zinc-700'}`} />
               <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-blue-300' : 'text-zinc-600'}`}>Morning</span>
             </div>
@@ -804,7 +804,7 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute);
               setTimePickerOpen(true);
             }}
-            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
               settings.dispatchEnabled 
                 ? 'bg-zinc-900 border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_15px_-3px_rgba(245,158,11,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
@@ -813,7 +813,7 @@ export function MonitorClient() {
             <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour}:{String(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute).padStart(2, '0')}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-amber-500 animate-pulse' : 'bg-zinc-700'}`} />
               <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-amber-300' : 'text-zinc-600'}`}>Lunch</span>
             </div>
@@ -826,7 +826,7 @@ export function MonitorClient() {
               setTimePickerMinute(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute);
               setTimePickerOpen(true);
             }}
-            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 ${
+            className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
               settings.dispatchEnabled 
                 ? 'bg-zinc-900 border-indigo-500/30 hover:border-indigo-500/60 shadow-[0_0_15px_-3px_rgba(99,102,241,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
@@ -835,7 +835,7 @@ export function MonitorClient() {
             <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-500'}`}>
               {settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour}:{String(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute).padStart(2, '0')}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-indigo-500 animate-pulse' : 'bg-zinc-700'}`} />
               <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-indigo-300' : 'text-zinc-600'}`}>Evening</span>
             </div>
