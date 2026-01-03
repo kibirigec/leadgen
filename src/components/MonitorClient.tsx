@@ -555,6 +555,19 @@ export function MonitorClient() {
     }
   };
 
+  const handleSaveTime = async () => {
+    setLoading('timepicker');
+    try {
+      await setCronTime(timePickerTarget, timePickerHour, timePickerMinute);
+      setTimePickerOpen(false);
+    } catch (err: any) {
+      console.error("Failed to save time:", err);
+      setError(err.message || "Failed to save time");
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const getStatusColor = () => {
     switch (status.status) {
       case "running": return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]";
