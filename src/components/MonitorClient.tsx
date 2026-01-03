@@ -559,6 +559,11 @@ export function MonitorClient() {
     setLoading('timepicker');
     try {
       await setCronTime(timePickerTarget, timePickerHour, timePickerMinute);
+      
+      // Auto-apply scheduling changes
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+      await fetch(`${workerUrl}/reschedule`, { method: 'POST' });
+      
       setTimePickerOpen(false);
     } catch (err: any) {
       console.error("Failed to save time:", err);
@@ -862,35 +867,60 @@ export function MonitorClient() {
           </button>
         </div>
 
-        {/* Reschedule button */}
-        <button
-          onClick={async () => {
-            setLoading('reschedule');
-            try {
-              const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-              await fetch(`${workerUrl}/reschedule`, { method: 'POST' });
-            } catch (err: any) {
-              setError(err.message);
-            } finally {
-              setLoading(null);
-            }
-          }}
-          disabled={loading !== null}
-          className="w-full relative group overflow-hidden bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 p-3 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center justify-center gap-2">
-            {loading === 'reschedule' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-            )}
-            <span className="text-sm font-semibold tracking-wide">
-              {loading === 'reschedule' ? 'APPLYING CHANGES...' : 'APPLY SCHEDULE CHANGES'}
-            </span>
-          </div>
-          {/* Subtle shine effect */}
-          <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        </button>
+        {/* Global Action Controls */}
+        <div className="grid grid-cols-4 gap-3 mt-2">
+          {/* Start Button */}
+          <button
+            onClick={handleResume}
+            disabled={loading !== null}
+            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
+              status.status === 'running' 
+               ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+               : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30'
+            }`}
+          >
+            {loading === 'resume' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
+            <span className="text-[10px] font-bold tracking-wider">START</span>
+          </button>
+
+          {/* Pause Button */}
+          <button
+            onClick={handlePause}
+            disabled={loading !== null}
+            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
+              status.status === 'paused'
+               ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+               : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/30'
+            }`}
+          >
+            {loading === 'pause' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4 fill-current" />}
+            <span className="text-[10px] font-bold tracking-wider">PAUSE</span>
+          </button>
+
+          {/* Stop Button */}
+          <button
+            onClick={handleStop}
+            disabled={loading !== null}
+            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
+               status.status === 'stopped'
+               ? 'bg-red-500/20 text-red-400 border-red-500/30'
+               : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30'
+            }`}
+          >
+            {loading === 'stop' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4 fill-current" />}
+            <span className="text-[10px] font-bold tracking-wider">STOP</span>
+          </button>
+
+          {/* Backlog (Clear Logs) Button */}
+          <button
+            onClick={handleClearLogs}
+            disabled={loading !== null}
+            className="group relative flex items-center justify-center gap-2 p-3 rounded-xl border bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300 disabled:opacity-50"
+          >
+            {loading === 'clear' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            <span className="text-[10px] font-bold tracking-wider">BACKLOG</span>
+          </button>
+        </div>
       </div>
 
 
