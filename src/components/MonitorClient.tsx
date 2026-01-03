@@ -1349,8 +1349,8 @@ export function MonitorClient() {
 
 
       {/* Control Buttons */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        {/* Start Button */}
+      {/* Control Buttons - Hidden as requested */}
+      {/* <div className="grid grid-cols-4 gap-3 mb-6">
         <button
           onClick={handleStart}
           disabled={loading !== null || status.status === 'running' || status.status === 'paused' || !settings.dispatchEnabled}
@@ -1364,7 +1364,6 @@ export function MonitorClient() {
           <span className="text-[10px] font-bold uppercase tracking-wide">Start</span>
         </button>
 
-        {/* Pause/Resume Button */}
         {status.status === "paused" ? (
           <button
             onClick={handleResume}
@@ -1385,7 +1384,6 @@ export function MonitorClient() {
           </button>
         )}
 
-        {/* Stop Button */}
         <button
           onClick={handleStop}
           disabled={loading !== null || (status.status !== 'running' && status.status !== 'paused')}
@@ -1395,7 +1393,6 @@ export function MonitorClient() {
           <span className="text-[10px] font-bold uppercase tracking-wide">Stop</span>
         </button>
 
-        {/* Dispatch Backlog Button */}
         <button
           onClick={handleDispatchBacklog}
           disabled={loading !== null || leadStats.backlog === 0 || status.status === 'running' || !settings.dispatchEnabled}
@@ -1409,7 +1406,6 @@ export function MonitorClient() {
           <span className="text-[10px] font-bold uppercase tracking-wide">Backlog</span>
         </button>
 
-        {/* Refresh Button */}
         <button
           onClick={() => { fetchLeadStats(); fetchReservePool(); }}
           className="group flex flex-col items-center gap-2 bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 p-4 rounded-2xl transition-all active:scale-95"
@@ -1417,7 +1413,7 @@ export function MonitorClient() {
           <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
           <span className="text-[10px] font-bold uppercase tracking-wide">Refresh</span>
         </button>
-      </div>
+      </div> */}
 
       {/* Live Logs */}
       <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-sm">
