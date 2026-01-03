@@ -401,11 +401,16 @@ export async function runBacklogDispatch(
     let skippedCount = 0;
 
     for (const lead of uniqueLeads) {
+        // Log the check for debugging
+        const checkPhone = lead.phone.replace(/\D/g, '');
         const alreadyContacted = await isPhoneUsed(lead.phone);
+
         if (alreadyContacted) {
             skippedCount++;
+            log('info', `  ⏭️ Skipping ${lead.name} (${checkPhone}): Already in outreach history`);
             await db.collection(collectionName).doc(lead.id).update({ status: 'skipped' });
         } else {
+            //log('info', `  ✅ Clean ${lead.name} (${checkPhone})`);
             leads.push(lead);
         }
     }
@@ -430,7 +435,11 @@ export async function runBacklogDispatch(
                 sentAt: new Date().toISOString(),
             });
             if (lead?.phone) {
-                await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted');
+                try {
+                    await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted');
+                } catch (err: any) {
+                    log('error', `  ❌ Failed to mark phone ${lead.phone} as used: ${err.message}`);
+                }
             }
         }
 

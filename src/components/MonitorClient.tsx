@@ -888,11 +888,13 @@ export function MonitorClient() {
           {/* Start Button */}
           <button
             onClick={handleResume}
-            disabled={loading !== null}
-            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
+            disabled={loading !== null || status.status === 'running' || !settings.dispatchEnabled}
+            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
               status.status === 'running' 
                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
-               : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30'
+               : !settings.dispatchEnabled
+                 ? 'bg-zinc-800/50 text-zinc-600 border-zinc-700/50'
+                 : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30'
             }`}
           >
             {loading === 'resume' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
@@ -902,8 +904,8 @@ export function MonitorClient() {
           {/* Pause Button */}
           <button
             onClick={handlePause}
-            disabled={loading !== null}
-            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
+            disabled={loading !== null || status.status !== 'running'}
+            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed ${
               status.status === 'paused'
                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/30'
@@ -916,8 +918,8 @@ export function MonitorClient() {
           {/* Stop Button */}
           <button
             onClick={handleStop}
-            disabled={loading !== null}
-            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
+            disabled={loading !== null || (status.status !== 'running' && status.status !== 'paused')}
+            className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed ${
                status.status === 'stopped'
                ? 'bg-red-500/20 text-red-400 border-red-500/30'
                : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30'
