@@ -1031,7 +1031,7 @@ export function MonitorClient() {
               <button
                 onClick={handleSaveTime}
                 disabled={loading === 'timepicker'}
-                className="flex-1 py-3.5 text-sm font-medium bg-zinc-100 hover:bg-white text-zinc-900 rounded-xl disabled:opacity-50 disabled:scale-100 transition-all shadow-lg shadow-white/5 active:scale-[0.98]"
+                className="flex-1 py-3.5 text-sm font-medium bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl disabled:opacity-50 disabled:scale-100 transition-all shadow-lg shadow-blue-500/5 active:scale-[0.98]"
               >
                 {loading === 'timepicker' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Set Time'}
               </button>
