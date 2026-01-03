@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled, setCronTime } from "@/actions/bot";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
 
@@ -919,84 +919,108 @@ export function MonitorClient() {
         </div>
       )}
 
-      {/* Time Picker Modal */}
+      {/* Time Picker Modal - Apple Style */}
       {timePickerOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 rounded-2xl p-6 max-w-sm w-full border border-zinc-800">
-            <h3 className="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
-              ⏰ Set {timePickerTarget.charAt(0).toUpperCase() + timePickerTarget.slice(1)} Time
-            </h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900/90 border border-white/10 rounded-3xl p-6 max-w-[320px] w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-semibold text-white tracking-tight flex items-center gap-2">
+                <Clock className="w-5 h-5 text-blue-500" />
+                Set Time
+              </h3>
+              <button 
+                onClick={() => setTimePickerOpen(false)}
+                className="text-zinc-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             
-            {/* Time Display */}
-            <div className="text-center mb-6">
-              <div className="text-4xl font-mono font-bold text-zinc-100">
-                {String(timePickerHour).padStart(2, '0')}:{String(timePickerMinute).padStart(2, '0')}
+            <div className="flex items-center justify-center gap-4 mb-8">
+              {/* Hour Input */}
+              <div className="flex flex-col items-center gap-2">
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Hour</label>
+                <div className="relative group">
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    value={timePickerHour}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val >= 0 && val <= 23) setTimePickerHour(val);
+                    }}
+                    className="w-20 h-24 bg-zinc-800/50 rounded-2xl text-center text-4xl font-light text-white border border-white/5 focus:border-blue-500/50 focus:bg-zinc-800 transition-all outline-none"
+                  />
+                  <div className="absolute inset-x-0 -bottom-6 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => setTimePickerHour(h => h > 0 ? h - 1 : 23)}
+                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
+                    >
+                      <img src="/icons/minus.svg" className="w-4 h-4 hidden" alt="" />-
+                    </button>
+                    <button 
+                      onClick={() => setTimePickerHour(h => h < 23 ? h + 1 : 0)}
+                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="text-xs text-zinc-500 mt-1">EAT (UTC+3)</div>
+
+              <div className="text-4xl font-light text-zinc-600 pb-6">:</div>
+
+              {/* Minute Input */}
+              <div className="flex flex-col items-center gap-2">
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Minute</label>
+                <div className="relative group">
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={timePickerMinute}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val >= 0 && val <= 59) setTimePickerMinute(val);
+                    }}
+                    className="w-20 h-24 bg-zinc-800/50 rounded-2xl text-center text-4xl font-light text-white border border-white/5 focus:border-blue-500/50 focus:bg-zinc-800 transition-all outline-none"
+                  />
+                   <div className="absolute inset-x-0 -bottom-6 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => setTimePickerMinute(m => m > 0 ? m - 1 : 59)}
+                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
+                    >
+                      -
+                    </button>
+                    <button 
+                      onClick={() => setTimePickerMinute(m => m < 59 ? m + 1 : 0)}
+                      className="p-1 hover:bg-white/10 rounded-full text-zinc-400"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Hour Slider */}
-            <div className="mb-4">
-              <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                <span>Hour</span>
-                <span>{timePickerHour}:00</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="23"
-                value={timePickerHour}
-                onChange={(e) => setTimePickerHour(parseInt(e.target.value))}
-                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
-              <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
-                <span>12am</span>
-                <span>6am</span>
-                <span>12pm</span>
-                <span>6pm</span>
-                <span>11pm</span>
-              </div>
-            </div>
-
-            {/* Minute Slider */}
-            <div className="mb-6">
-              <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                <span>Minute</span>
-                <span>:{String(timePickerMinute).padStart(2, '0')}</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="59"
-                value={timePickerMinute}
-                onChange={(e) => setTimePickerMinute(parseInt(e.target.value))}
-                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
-              <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
-                <span>:00</span>
-                <span>:15</span>
-                <span>:30</span>
-                <span>:45</span>
-                <span>:59</span>
-              </div>
+            <div className="text-center text-xs text-zinc-500 font-medium mb-8 bg-zinc-800/50 py-2 rounded-lg">
+              Time Zone: East Africa Time (UTC+3)
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setTimePickerOpen(false)}
-                className="flex-1 py-2 text-zinc-400 hover:bg-zinc-800 rounded-xl"
+                className="flex-1 py-3.5 text-sm font-medium text-zinc-400 hover:bg-white/5 rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  await setCronTime(timePickerTarget, timePickerHour, timePickerMinute);
-                  setTimePickerOpen(false);
-                }}
-                disabled={loading === 'cron-time'}
-                className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl disabled:opacity-50"
+                onClick={handleSaveTime}
+                disabled={loading === 'timepicker'}
+                className="flex-1 py-3.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 active:scale-[0.98] text-white rounded-xl disabled:opacity-50 disabled:scale-100 transition-all shadow-lg shadow-blue-500/20"
               >
-                Save
+                {loading === 'timepicker' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Set Time'}
               </button>
             </div>
           </div>
