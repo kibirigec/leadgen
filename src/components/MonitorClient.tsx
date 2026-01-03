@@ -151,9 +151,10 @@ export function MonitorClient() {
           );
         }
       } else if (type === 'reserve') {
-        // Show reserve pool leads
+        // Show reserve pool leads (available only)
         q = query(
           collection(clientDb, "reserve_pool"),
+          where("status", "==", "available"),
           limit(50)
         );
       } else if (type === 'backlog') {
