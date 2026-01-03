@@ -630,55 +630,62 @@ export function MonitorClient() {
       )}
 
       {/* Manual Cron Triggers */}
-      <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Manual Triggers</span>
+      <div className="mb-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            {/* Scrape Toggle */}
-            <button
-              onClick={async () => {
-                setLoading('scrape-toggle');
-                await setScrapeEnabled(!settings.scrapeEnabled);
-                setLoading(null);
-              }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${
-                settings.scrapeEnabled 
-                  ? 'bg-purple-500/20 text-purple-400' 
-                  : 'bg-zinc-700/50 text-zinc-500'
-              }`}
-            >
-              <Zap className="w-3 h-3" />
-              {settings.scrapeEnabled ? 'Scrape On' : 'Scrape Off'}
-            </button>
-            {/* Dispatch Toggle */}
-            <button
-              onClick={async () => {
-                setLoading('dispatch-toggle');
-                await setDispatchEnabled(!settings.dispatchEnabled);
-                setLoading(null);
-              }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${
-                settings.dispatchEnabled 
-                  ? 'bg-blue-500/20 text-blue-400' 
-                  : 'bg-zinc-700/50 text-zinc-500'
-              }`}
-            >
-              <Rocket className="w-3 h-3" />
-              {settings.dispatchEnabled ? 'Dispatch On' : 'Dispatch Off'}
-            </button>
-            {/* Test Mode Toggle */}
-            <button
-              onClick={handleToggleTestMode}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${
-                settings.testMode 
-                  ? 'bg-orange-500/20 text-orange-400' 
-                  : 'bg-white/5 text-zinc-400 hover:bg-white/10'
-              }`}
-            >
-              <FlaskConical className="w-3 h-3" />
-              {settings.testMode ? 'Test On' : 'Test Off'}
-            </button>
+            <Zap className="w-4 h-4 text-zinc-400" />
+            <span className="text-xs text-zinc-300 font-semibold uppercase tracking-wider">Manual Controls</span>
           </div>
+        </div>
+
+        {/* Global Controls */}
+        <div className="grid grid-cols-3 gap-3 mb-4 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
+          {/* Scrape Toggle */}
+          <button
+            onClick={async () => {
+              setLoading('scrape-toggle');
+              await setScrapeEnabled(!settings.scrapeEnabled);
+              setLoading(null);
+            }}
+            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+              settings.scrapeEnabled 
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/20' 
+                : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50 hover:bg-zinc-800'
+            }`}
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${settings.scrapeEnabled ? 'bg-purple-500 animate-pulse' : 'bg-zinc-600'}`} />
+            <span className="truncate">{settings.scrapeEnabled ? 'Scrape Active' : 'Scrape Paused'}</span>
+          </button>
+
+          {/* Dispatch Toggle */}
+          <button
+            onClick={async () => {
+              setLoading('dispatch-toggle');
+              await setDispatchEnabled(!settings.dispatchEnabled);
+              setLoading(null);
+            }}
+            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+              settings.dispatchEnabled 
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' 
+                : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50 hover:bg-zinc-800'
+            }`}
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-blue-500 animate-pulse' : 'bg-zinc-600'}`} />
+            <span className="truncate">{settings.dispatchEnabled ? 'Dispatch Active' : 'Dispatch Paused'}</span>
+          </button>
+
+          {/* Test Mode Toggle */}
+          <button
+            onClick={handleToggleTestMode}
+            className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+              settings.testMode 
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20' 
+                : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50 hover:bg-zinc-800'
+            }`}
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${settings.testMode ? 'bg-orange-500 animate-pulse' : 'bg-zinc-600'}`} />
+            <span className="truncate">{settings.testMode ? 'Test Mode On' : 'Test Mode Off'}</span>
+          </button>
         </div>
         <div className="grid grid-cols-4 gap-3">
           <button
