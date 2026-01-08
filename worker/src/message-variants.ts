@@ -17,128 +17,130 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     {
         businessType: 'pr_firm',
         variants: [
-            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with PR firms to build their websites that clearly present your services and past work, so potential clients can find you easily and understand what you do before reaching out.\n\nWould having one be useful for {name}?`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with PR firms to create websites that clearly present your services and past work, helping potential clients understand what you do before reaching out.\n\nWould having one be useful for {name}?`,
         ],
     },
     // SPECIAL: CHARITY ORGANIZATIONS
     {
         businessType: 'charity',
         variants: [
-            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} and was impressed by the work you’re doing.\n\nI work with charitable organizations to build websites that clearly communicate their mission and impact, making it easier for donors and partners to understand your work and also donate directly through the website.\n\nWould having one be useful for {name}?`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} and was impressed by the work you’re doing.\n\nI work with charitable organizations to create websites that clearly communicate their mission and impact, making it easier for donors and partners to understand your work and contribute directly through the website.\n\nWould having one be useful for {name}?`,
         ],
     },
-    // SPECIAL: PRIVATE CLINICS (Specific Request)
+    // SPECIAL: PRIVATE CLINICS
     {
         businessType: 'private_clinic',
         variants: [
-            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with clinics to build websites that help patients find the clinic online and know what to expect before reaching out.\n\nWould having one be useful for {name}?`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with clinics to create websites that help patients understand your services and know what to expect before reaching out.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 1. CLINICS / MEDICAL
     {
         businessType: 'clinic',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for patients.\n\nI help clinics make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with clinics to create websites that help patients understand your services and make it easy to reach out or book appointments.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 2. DENTAL CLINICS
     {
         businessType: 'dental',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for patients.\n\nI help dental clinics make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with dental clinics to create websites that help patients understand your services and make it easy to reach out or book appointments.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 3. LAW FIRMS / LEGAL
     {
         businessType: 'law',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for clients.\n\nI help law firms make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with law firms to create websites that clearly present your services and areas of expertise, helping potential clients understand what you do before reaching out.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 4. SCHOOLS / TRAINING CENTERS
     {
         businessType: 'school',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for students.\n\nI help schools make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with schools and training centers to create websites that clearly present your programs and offerings, making it easier for prospective students and parents to understand and reach out.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 5. REAL ESTATE AGENTS
     {
         businessType: 'realtor',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for clients.\n\nI help real estate agents make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with real estate agents to create websites that showcase your listings and services, making it easier for potential buyers and renters to find you and get in touch.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 6. RESTAURANTS
     {
         businessType: 'restaurant',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for customers.\n\nI help restaurants make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with restaurants to create websites that show your menu and offerings clearly, helping diners find you and make reservations or inquiries easily.\n\nWould having one be useful for {name}?`,
         ],
     },
     {
         businessType: 'restaurant_evening',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for customers.\n\nI help restaurants make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with restaurants to create websites that show your menu and offerings clearly, helping diners find you and make reservations or inquiries easily.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 7. BARS / LOUNGES
     {
         businessType: 'bar',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for patrons.\n\nI help bars and lounges make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with bars and lounges to create websites that showcase your offerings and events, making it easier for patrons to find you and reach out.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 8. SALONS & BARBERSHOPS
     {
         businessType: 'salon',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for clients.\n\nI help salons and barbershops make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with salons and barbershops to create websites that clearly show your services and pricing, helping clients find you and book appointments online.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 9. GYMS & FITNESS
     {
         businessType: 'gym',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for members.\n\nI help fitness centers make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with gyms and fitness centers to create websites that present your programs and classes clearly, making it easier for members and prospects to find you and reach out.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 10. PHARMACIES
     {
         businessType: 'pharmacy',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for customers.\n\nI help pharmacies make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with pharmacies to create websites that clearly present your products and services, making it easier for customers to find you and contact you directly.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 11. COURIER / DELIVERY
     {
         businessType: 'courier',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for clients.\n\nI help delivery services make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with delivery services to create websites that clearly show your offerings and coverage, making it easier for clients to find you and place requests.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 12. CAR REPAIR / MECHANICS
     {
         businessType: 'mechanic',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for customers.\n\nI help garages and mechanics make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with garages and mechanics to create websites that showcase your services and pricing, making it easier for customers to find you and book appointments or inquiries.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 13. HOTELS / LODGES
     {
         businessType: 'hotel',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for guests.\n\nI help hotels and lodges make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with hotels, lodges, and guesthouses to create websites that clearly show your rooms, services, and availability, helping travelers find you and book directly.\n\nWould having one be useful for {name}?`,
         ],
     },
     // 14. E-COMMERCE / SHOPS
     {
         businessType: 'ecommerce',
         variants: [
-            `Hello👋🏽, I found {name} on Google Maps.\n\nI noticed there's no direct WhatsApp contact page for buyers.\n\nI help shops make it easy for people to reach them.\n\nWould you be open to seeing how this would help {name}?\n\n- Calvin, Weblery`,
+            `Hello👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with shops to create websites that showcase your products and services clearly, making it easier for customers to find you and make purchases or inquiries.\n\nWould having one be useful for {name}?`,
         ],
     },
 ];
+
+
 
 
 /**
