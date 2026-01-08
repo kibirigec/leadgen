@@ -13,6 +13,27 @@ export interface MessageTemplate {
 }
 
 export const MESSAGE_TEMPLATES: MessageTemplate[] = [
+    // SPECIAL: PR FIRMS
+    {
+        businessType: 'pr_firm',
+        variants: [
+            `Hello to you👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with PR firms to build their websites that clearly present your services and past work, so potential clients can find you easily and understand what you do before reaching out.\n\nWould having one be useful for {name}?`,
+        ],
+    },
+    // SPECIAL: CHARITY ORGANIZATIONS
+    {
+        businessType: 'charity',
+        variants: [
+            `Hello to you👋🏽, My name is Calvin from Weblery, I came across {name} and was impressed by the work you’re doing.\n\nI work with charitable organizations to build websites that clearly communicate their mission and impact, making it easier for donors and partners to understand your work and also donate directly through the website.\n\nWould having one be useful for {name}?`,
+        ],
+    },
+    // SPECIAL: PRIVATE CLINICS (Specific Request)
+    {
+        businessType: 'private_clinic',
+        variants: [
+            `Hello to you👋🏽, My name is Calvin from Weblery, I came across {name} on Google.\n\nI work with clinics to build websites that help patients find the clinic online and know what to expect before reaching out.\n\nWould having one be useful for {name}?`,
+        ],
+    },
     // 1. CLINICS / MEDICAL
     {
         businessType: 'clinic',
