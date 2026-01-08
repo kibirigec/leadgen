@@ -31,10 +31,12 @@ export async function runDispatch(
 
     // Check test mode
     const testSettings = await getTestSettings();
-    const collectionName = testSettings.testMode ? 'test_leads_queue' : 'leads_queue';
+    // User Request: Test Result should use REAL data source but intercept output
+    const collectionName = 'leads_queue';
 
     if (testSettings.testMode) {
-        log('info', `🧪 TEST MODE - Using collection: ${collectionName}`);
+        log('info', `🧪 TEST MODE ACTIVE: Using real leads, but redirecting messages to ${testSettings.testPhone}`);
+        log('info', `🧪 TEST MODE: Leads will NOT be marked as contacted.`);
     }
 
     log('info', `Starting ${window} dispatch${limit ? ` (limit: ${limit})` : ''}`);
@@ -211,8 +213,16 @@ export async function runDispatch(
         return { success: true, sentCount: leads.length };
     }
 
+    // PREPARE LEADS FOR BOT
+    const leadsToProcess = leads.map(l => {
+        if (testSettings.testMode && testSettings.testPhone) {
+            return { ...l, phone: testSettings.testPhone, originalPhone: l.phone };
+        }
+        return l;
+    });
+
     // Send start notification
-    await notifyDispatchStart(window, leads.length, leads);
+    await notifyDispatchStart(window, leadsToProcess.length, leadsToProcess);
 
     // Update worker status
     await updateWorkerStatus({
@@ -221,23 +231,33 @@ export async function runDispatch(
 
     // Run the bot
     try {
-        const result = await runWhatsAppBot(leads, log);
+        const result = await runWhatsAppBot(leadsToProcess, log);
 
         log('info', `Bot finished. Contacted IDs: ${result.contactedLeadIds.join(', ')}`);
 
         // Mark leads as sent and record in deduplication history
         for (const leadId of result.contactedLeadIds) {
             const lead = leads.find(l => l.id === leadId);
+
+            if (testSettings.testMode) {
+                log('info', `🧪 TEST MODE: Skipping DB update for ${lead?.name} (${leadId})`);
+                continue;
+            }
+
             log('info', `  Marking lead ${leadId} as sent`);
 
-            await db.collection('leads_queue').doc(leadId).update({
+            await db.collection(collectionName).doc(leadId).update({
                 status: 'sent',
                 sentAt: new Date().toISOString(),
             });
 
             // Record in outreach_history for deduplication
             if (lead?.phone) {
-                await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted');
+                try {
+                    await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted');
+                } catch (err: any) {
+                    log('error', `  ❌ Failed to mark phone ${lead.phone} as used: ${err.message}`);
+                }
             }
         }
 
@@ -283,10 +303,12 @@ export async function runBacklogDispatch(
 
     // Check test mode
     const testSettings = await getTestSettings();
-    const collectionName = testSettings.testMode ? 'test_leads_queue' : 'leads_queue';
+    // User Request: Test Result should use REAL data source but intercept output
+    const collectionName = 'leads_queue';
 
     if (testSettings.testMode) {
-        log('info', `🧪 TEST MODE - Using collection: ${collectionName}`);
+        log('info', `🧪 TEST MODE ACTIVE (Backlog): Using real leads, but redirecting messages to ${testSettings.testPhone}`);
+        log('info', `🧪 TEST MODE: Leads will NOT be marked as contacted.`);
     }
 
     log('info', `📦 Starting BACKLOG-ONLY dispatch (limit: ${limit})`);
@@ -294,6 +316,9 @@ export async function runBacklogDispatch(
     let collectedLeads: QueuedLead[] = [];
     let backlogCount = 0;
     let reserveCount = 0;
+
+    // ... (fetch logic unchanged for lines 298-382) ...
+    // FETCH LOGIC IS UNCHANGED (lines 298-382) use collectionName which is now forced to 'leads_queue'
 
     // 1. Backlog leads (oldest first, time-window agnostic)
     log('info', `Step 1: Fetching backlog leads (oldest first)...`);
@@ -421,15 +446,29 @@ export async function runBacklogDispatch(
 
     log('info', `Dispatching ${leads.length} leads (${backlogCount} backlog, ${reserveCount} reserve)`);
 
+    // PREPARE LEADS FOR BOT
+    const leadsToProcess = leads.map(l => {
+        if (testSettings.testMode && testSettings.testPhone) {
+            return { ...l, phone: testSettings.testPhone, originalPhone: l.phone };
+        }
+        return l;
+    });
+
     // Send notifications
-    await notifyDispatchStart(window, leads.length, leads);
+    await notifyDispatchStart(window, leadsToProcess.length, leadsToProcess);
     await updateWorkerStatus({ bot: { status: 'running', sentToday: 0 } });
 
     try {
-        const result = await runWhatsAppBot(leads, log);
+        const result = await runWhatsAppBot(leadsToProcess, log);
 
         for (const leadId of result.contactedLeadIds) {
             const lead = leads.find(l => l.id === leadId);
+
+            if (testSettings.testMode) {
+                log('info', `🧪 TEST MODE: Skipping DB update for ${lead?.name} (${leadId})`);
+                continue;
+            }
+
             await db.collection(collectionName).doc(leadId).update({
                 status: 'sent',
                 sentAt: new Date().toISOString(),
