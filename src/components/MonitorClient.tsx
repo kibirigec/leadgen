@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled, setCronTime } from "@/actions/bot";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock, ChevronUp, ChevronDown, Target } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock, ChevronUp, ChevronDown, Target, HelpCircle } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
 
@@ -106,6 +106,8 @@ export function MonitorClient() {
   // Targeted actions state
   const [targetLocation, setTargetLocation] = useState('');
   const [targetBusinessType, setTargetBusinessType] = useState('');
+  const [scrapeLimit, setScrapeLimit] = useState<number | ''>('');
+  const [dispatchLimit, setDispatchLimit] = useState<number | ''>('');
 
   // Helper: action with timeout
   const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -429,7 +431,10 @@ export function MonitorClient() {
       const res = await fetch(`${workerUrl}/trigger/scrape`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location: targetLocation })
+        body: JSON.stringify({ 
+          location: targetLocation,
+          limit: scrapeLimit || undefined 
+        })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
@@ -454,7 +459,10 @@ export function MonitorClient() {
       const res = await fetch(`${workerUrl}/trigger/dispatch/${window}`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filters })
+        body: JSON.stringify({ 
+          filters,
+          limit: dispatchLimit || undefined
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
@@ -1305,6 +1313,9 @@ export function MonitorClient() {
       <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
           <Zap className="w-3 h-3" /> Dispatch Windows
+          <span title="Active windows where leads are dispatched. Icons show current time of day.">
+            <HelpCircle className="w-3 h-3 text-zinc-600 cursor-help ml-1" />
+          </span>
         </h3>
         <div className="space-y-3">
           {(['morning', 'lunch', 'evening'] as const).map((win) => (
@@ -1345,6 +1356,9 @@ export function MonitorClient() {
       <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
           <Package className="w-3 h-3" /> Reserve Pool
+          <span title="Leads scraped but not yet dispatched. They fill gaps when new scrapes are low.">
+            <HelpCircle className="w-3 h-3 text-zinc-600 cursor-help ml-1" />
+          </span>
         </h3>
         <div className="grid grid-cols-4 gap-3 text-center">
           {(['morning', 'lunch', 'evening', 'total'] as const).map((key) => (
@@ -1441,8 +1455,9 @@ export function MonitorClient() {
           <Target className="w-3 h-3" /> Targeted Operations
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="space-y-2">
+        {/* Inputs Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div className="md:col-span-1 space-y-2">
                 <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Target Location</label>
                 <input 
                     type="text" 
@@ -1452,7 +1467,7 @@ export function MonitorClient() {
                     className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20"
                 />
             </div>
-            <div className="space-y-2">
+            <div className="md:col-span-1 space-y-2">
                 <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Business Type</label>
                 <select 
                     value={targetBusinessType}
@@ -1480,15 +1495,38 @@ export function MonitorClient() {
                     <option value="ecommerce">E-commerce</option>
                 </select>
             </div>
+             <div className="md:col-span-1 space-y-2">
+                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Scrape Limit</label>
+                <input 
+                    type="number" 
+                    value={scrapeLimit}
+                    onChange={(e) => setScrapeLimit(e.target.value ? parseInt(e.target.value) : '')}
+                    placeholder={settings.testMode ? "Test Mode: 5" : "Default: Auto"}
+                    disabled={settings.testMode}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+            </div>
+            <div className="md:col-span-1 space-y-2">
+                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Dispatch Limit</label>
+                <input 
+                    type="number" 
+                    value={dispatchLimit}
+                    onChange={(e) => setDispatchLimit(e.target.value ? parseInt(e.target.value) : '')}
+                    placeholder="Default: Window Quota"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20"
+                />
+            </div>
         </div>
 
+        {/* Action Buttons */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
              <button
                 onClick={handleTriggerScrape}
                 disabled={loading === 'scrape' || !settings.scrapeEnabled}
-                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
+                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50 flex flex-col items-center justify-center gap-1"
              >
-                {loading === 'scrape' ? 'Scraping...' : 'Run Scrape'}
+                <span>{loading === 'scrape' ? 'Scraping...' : 'Run Scrape'}</span>
+                {settings.testMode && <span className="text-[8px] bg-purple-500/20 px-1 rounded">TEST MODE (Max 5)</span>}
              </button>
 
              <button

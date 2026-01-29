@@ -10,7 +10,7 @@
  * - Daily limits: 30 morning + 30 lunch + 40 evening = 100/day
  */
 
-import { getDb, updateWorkerStatus } from './firebase';
+import { getDb, updateWorkerStatus, getTestSettings } from './firebase';
 import { ApifyClient } from 'apify-client';
 import { MockApifyClient } from './mock-apify';
 import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
@@ -42,6 +42,14 @@ export async function runScrape(
     const { limit, targetLocation } = options;
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
+
+    const testSettings = await getTestSettings();
+    let effectiveLimit = limit;
+
+    if (testSettings.testMode) {
+        log('info', `🧪 TEST MODE ACTIVE: Forcing limit to 5 leads.`);
+        effectiveLimit = 5;
+    }
 
     // Determine target location(s)
     let todaysCity: string;
@@ -80,7 +88,7 @@ export async function runScrape(
     for (const windowName of ['morning', 'lunch', 'evening'] as const) {
         const window = windowName as TimeWindow;
         const windowQuota = WINDOW_QUOTAS[window];
-        const windowLimit = limit ? Math.min(limit, windowQuota) : windowQuota;
+        const windowLimit = effectiveLimit ? Math.min(effectiveLimit, windowQuota) : windowQuota;
         const businessTypes = getBusinessTypesForWindow(window);
 
         log('info', `\n📋 ${window.toUpperCase()} WINDOW (need ${windowLimit} leads)`);
@@ -119,12 +127,16 @@ export async function runScrape(
 
                 // Find available suburbs (not on cooldown for this keyword)
                 for (const suburb of suburbs) {
-                    // Check cooldown for this specific keyword+suburb
+                    // Check cooldown for this specific keyword+suburb (SKIP check in test mode? No, better to simulate real conditions, but don't WRITE)
                     const available = await isAvailableForScrape(keyword, suburb);
-                    if (!available) {
+                    if (!available && !testSettings.testMode) {
                         log('info', `        ⏸️ ${suburb} (cooldown)`);
                         continue;
                     }
+                    if (!available && testSettings.testMode) {
+                        log('info', `        🧪 Test Mode: Ignoring cooldown for ${suburb}`);
+                    }
+
 
                     try {
                         // Build query: {keyword} in {suburb}
@@ -140,8 +152,12 @@ export async function runScrape(
 
                         const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
 
-                        // Mark this keyword+suburb as scraped
-                        await markAsScraped(keyword, suburb, items.length);
+                        // Mark this keyword+suburb as scraped (SKIP IN TEST MODE)
+                        if (!testSettings.testMode) {
+                            await markAsScraped(keyword, suburb, items.length);
+                        } else {
+                            log('info', `        🧪 Test Mode: Skipping rotation update (keeping "${keyword}" fresh)`);
+                        }
 
                         let suburbUsable = 0;
                         for (const item of items) {
