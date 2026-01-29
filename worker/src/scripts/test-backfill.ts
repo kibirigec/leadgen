@@ -81,7 +81,7 @@ async function runTest() {
     console.log('\n🚀 Running Dispatch (Target: 15)...');
     // We expect: 5 Fresh + 5 Backlog + 5 Reserve = 15 Total
 
-    await runDispatch('morning', (level, msg) => console.log(`[${level.toUpperCase()}] ${msg}`), 15, true);
+    await runDispatch('morning', (level, msg) => console.log(`[${level.toUpperCase()}] ${msg}`), { limit: 15, dryRun: true });
 
     console.log('\n📊 Verifying Results...');
     const db = getDb();

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled, setCronTime } from "@/actions/bot";
-import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock, ChevronUp, ChevronDown } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock, ChevronUp, ChevronDown, Target } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
 
@@ -102,6 +102,10 @@ export function MonitorClient() {
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null);
   const [detailedLeads, setDetailedLeads] = useState<any[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
+
+  // Targeted actions state
+  const [targetLocation, setTargetLocation] = useState('');
+  const [targetBusinessType, setTargetBusinessType] = useState('');
 
   // Helper: action with timeout
   const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -422,7 +426,11 @@ export function MonitorClient() {
     setLoading('scrape');
     try {
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-      const res = await fetch(`${workerUrl}/trigger/scrape`, { method: 'POST' });
+      const res = await fetch(`${workerUrl}/trigger/scrape`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location: targetLocation })
+      });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
       await fetchLeadStats();
@@ -438,7 +446,16 @@ export function MonitorClient() {
     setLoading(`dispatch-${window}`);
     try {
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-      const res = await fetch(`${workerUrl}/trigger/dispatch/${window}`, { method: 'POST' });
+      const filters = {
+        businessType: targetBusinessType && targetBusinessType !== 'all' ? targetBusinessType : undefined,
+        location: targetLocation || undefined,
+      };
+      
+      const res = await fetch(`${workerUrl}/trigger/dispatch/${window}`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filters })
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
     } catch (err: any) {
@@ -1417,6 +1434,88 @@ export function MonitorClient() {
           <span className="text-[10px] font-bold uppercase tracking-wide">Refresh</span>
         </button>
       </div> */}
+
+      {/* Targeted Operations */}
+      <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Target className="w-3 h-3" /> Targeted Operations
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Target Location</label>
+                <input 
+                    type="text" 
+                    value={targetLocation}
+                    onChange={(e) => setTargetLocation(e.target.value)}
+                    placeholder="e.g. Ntinda"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20"
+                />
+            </div>
+            <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Business Type</label>
+                <select 
+                    value={targetBusinessType}
+                    onChange={(e) => setTargetBusinessType(e.target.value)}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20 appearance-none"
+                >
+                    <option value="">All Types</option>
+                    <option value="pr_firm">PR Firm</option>
+                    <option value="charity">Charity</option>
+                    <option value="private_clinic">Private Clinic</option>
+                    <option value="clinic">Clinic</option>
+                    <option value="dental">Dental</option>
+                    <option value="law">Law Firm</option>
+                    <option value="school">School</option>
+                    <option value="realtor">Realtor</option>
+                    <option value="restaurant">Restaurant</option>
+                    <option value="restaurant_evening">Restaurant (Eve)</option>
+                    <option value="bar">Bar</option>
+                    <option value="salon">Salon</option>
+                    <option value="gym">Gym</option>
+                    <option value="pharmacy">Pharmacy</option>
+                    <option value="courier">Courier</option>
+                    <option value="mechanic">Mechanic</option>
+                    <option value="hotel">Hotel</option>
+                    <option value="ecommerce">E-commerce</option>
+                </select>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+             <button
+                onClick={handleTriggerScrape}
+                disabled={loading === 'scrape' || !settings.scrapeEnabled}
+                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
+             >
+                {loading === 'scrape' ? 'Scraping...' : 'Run Scrape'}
+             </button>
+
+             <button
+                onClick={() => triggerDispatch('morning')}
+                disabled={(loading && loading.startsWith('dispatch')) || !settings.dispatchEnabled}
+                className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
+             >
+                Dispatch Morn
+             </button>
+
+             <button
+                onClick={() => triggerDispatch('lunch')}
+                disabled={(loading && loading.startsWith('dispatch')) || !settings.dispatchEnabled}
+                className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
+             >
+                Dispatch Lunch
+             </button>
+
+             <button
+                onClick={() => triggerDispatch('evening')}
+                disabled={(loading && loading.startsWith('dispatch')) || !settings.dispatchEnabled}
+                className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
+             >
+                Dispatch Eve
+             </button>
+        </div>
+      </div>
 
       {/* Live Logs */}
       <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-sm">

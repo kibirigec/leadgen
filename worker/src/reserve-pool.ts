@@ -71,13 +71,25 @@ export async function addToReservePool(leads: Omit<ReservePoolLead, 'status'>[])
  */
 export async function pullFromReservePool(
     timeWindow: TimeWindow,
-    limit: number
+    limit: number,
+    filters?: { businessType?: string; location?: string }
 ): Promise<ReservePoolLead[]> {
     const db = getDb();
 
-    const snapshot = await db.collection('reserve_pool')
+    let query = db.collection('reserve_pool')
         .where('timeWindow', '==', timeWindow)
-        .where('status', '==', 'available')
+        .where('status', '==', 'available');
+
+    if (filters?.businessType) {
+        query = query.where('businessType', '==', filters.businessType);
+    }
+
+    if (filters?.location) {
+        // We assume location targets the City field
+        query = query.where('city', '==', filters.location);
+    }
+
+    const snapshot = await query
         .orderBy('priority', 'desc')
         .limit(limit)
         .get();
@@ -95,7 +107,7 @@ export async function pullFromReservePool(
         });
     }
 
-    console.log(`📤 Pulled ${leads.length} leads from reserve pool for ${timeWindow}`);
+    console.log(`📤 Pulled ${leads.length} leads from reserve pool for ${timeWindow} (Filters: ${JSON.stringify(filters || {})})`);
     return leads;
 }
 

@@ -35,16 +35,29 @@ interface ScrapedLead {
     priority: number;
 }
 
-export async function runScrape(log: LogFn, limit?: number): Promise<{ success: boolean; totalScraped: number }> {
+export async function runScrape(
+    log: LogFn,
+    options: { limit?: number; targetLocation?: string } = {}
+): Promise<{ success: boolean; totalScraped: number }> {
+    const { limit, targetLocation } = options;
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
 
-    // Get today's city and its suburbs
-    const todaysCity = getTodaysCity();
-    const suburbs = getSuburbsForCity(todaysCity);
+    // Determine target location(s)
+    let todaysCity: string;
+    let suburbs: string[];
 
-    log('info', `🚀 Starting scrape for ${today}`);
-    log('info', `📍 City: ${todaysCity} (${suburbs.length} suburbs)`);
+    if (targetLocation && targetLocation.trim().length > 0) {
+        todaysCity = targetLocation;
+        suburbs = [targetLocation]; // Use exact location as the "suburb"
+        log('info', `🚀 Starting scrape for ${today} (TARGET: ${targetLocation})`);
+    } else {
+        // Default: Rotation Mode
+        todaysCity = getTodaysCity();
+        suburbs = getSuburbsForCity(todaysCity);
+        log('info', `🚀 Starting scrape for ${today}`);
+        log('info', `📍 City: ${todaysCity} (${suburbs.length} suburbs)`);
+    }
 
     // Send start notification
     await notifyScrapeStart();

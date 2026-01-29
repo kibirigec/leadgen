@@ -23,15 +23,14 @@ async function getCollectionName(name: string): Promise<string> {
 export async function runDispatch(
     window: TimeWindow,
     log: LogFn,
-    limit?: number,
-    dryRun: boolean = false
+    options: { limit?: number; dryRun?: boolean; filters?: { businessType?: string; location?: string } } = {}
 ): Promise<{ success: boolean; sentCount: number }> {
+    const { limit, dryRun = false, filters } = options;
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
 
     // Check test mode
     const testSettings = await getTestSettings();
-    // User Request: Test Result should use REAL data source but intercept output
     const collectionName = 'leads_queue';
 
     if (testSettings.testMode) {
@@ -39,19 +38,25 @@ export async function runDispatch(
         log('info', `🧪 TEST MODE: Leads will NOT be marked as contacted.`);
     }
 
-    log('info', `Starting ${window} dispatch${limit ? ` (limit: ${limit})` : ''}`);
+    // Log filters
+    const filterInfo = filters ? ` (Filters: ${JSON.stringify(filters)})` : '';
+    log('info', `Starting ${window} dispatch${limit ? ` (limit: ${limit})` : ''}${filterInfo}`);
 
     const defaultLimit = window === 'evening' ? 40 : 30;
     const targetLimit = limit || defaultLimit;
 
     // 1. Fresh Leads (Today)
     log('info', `Step 1: Fetching fresh leads for ${window} (Target: ${targetLimit})`);
-    const freshLeadsSnap = await db.collection(collectionName)
+
+    let freshQuery = db.collection(collectionName)
         .where('timeWindow', '==', window)
         .where('dispatchDate', '==', today)
-        .where('status', '==', 'pending')
-        .limit(targetLimit * 2) // Fetch extra for deduplication
-        .get();
+        .where('status', '==', 'pending');
+
+    if (filters?.businessType) freshQuery = freshQuery.where('businessType', '==', filters.businessType);
+    if (filters?.location) freshQuery = freshQuery.where('city', '==', filters.location);
+
+    const freshLeadsSnap = await freshQuery.limit(targetLimit * 2).get();
 
     let collectedLeads: QueuedLead[] = freshLeadsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as Omit<QueuedLead, 'id'> }));
     log('info', `  Found ${collectedLeads.length} fresh leads`);
@@ -61,13 +66,14 @@ export async function runDispatch(
         const gap = targetLimit - collectedLeads.length;
         log('info', `Step 2: Gap detected (${gap}). Checking backlog (oldest first)...`);
 
-        // Query directly for leads from previous days (not today)
-        const backlogSnap = await db.collection(collectionName)
+        let backlogQuery = db.collection(collectionName)
             .where('status', '==', 'pending')
-            .where('dispatchDate', '<', today)
-            .orderBy('dispatchDate', 'asc')
-            .limit(gap)
-            .get();
+            .where('dispatchDate', '<', today);
+
+        if (filters?.businessType) backlogQuery = backlogQuery.where('businessType', '==', filters.businessType);
+        if (filters?.location) backlogQuery = backlogQuery.where('city', '==', filters.location);
+
+        const backlogSnap = await backlogQuery.orderBy('dispatchDate', 'asc').limit(gap).get();
 
         const backlogCandidates: QueuedLead[] = backlogSnap.docs
             .map(doc => ({ id: doc.id, ...doc.data() as Omit<QueuedLead, 'id'> }));
@@ -99,12 +105,14 @@ export async function runDispatch(
 
         log('info', `Step 2.5: Still short (${gap}). Checking failed leads for retry...`);
 
-        const failedSnap = await db.collection(collectionName)
+        let failedQuery = db.collection(collectionName)
             .where('status', '==', 'failed')
-            .where('dispatchDate', '<', cutoffDate)
-            .orderBy('dispatchDate', 'asc')
-            .limit(gap)
-            .get();
+            .where('dispatchDate', '<', cutoffDate);
+
+        if (filters?.businessType) failedQuery = failedQuery.where('businessType', '==', filters.businessType);
+        if (filters?.location) failedQuery = failedQuery.where('city', '==', filters.location);
+
+        const failedSnap = await failedQuery.orderBy('dispatchDate', 'asc').limit(gap).get();
 
         const failedCandidates: QueuedLead[] = failedSnap.docs
             .map(doc => ({ id: doc.id, ...doc.data() as Omit<QueuedLead, 'id'> }));
@@ -133,7 +141,8 @@ export async function runDispatch(
         const gap = targetLimit - collectedLeads.length;
         log('info', `Step 3: Still short (${gap}). Checking Reserve Pool...`);
 
-        const reserveLeads = await pullFromReservePool(window, gap);
+        // Pass filters to reserve pool
+        const reserveLeads = await pullFromReservePool(window, gap, filters);
 
         if (reserveLeads.length > 0) {
             log('info', `  Pulled ${reserveLeads.length} leads from Reserve Pool. Adding to queue...`);

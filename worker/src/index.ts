@@ -85,9 +85,10 @@ app.get('/health', (req, res) => {
 // ============================================
 
 app.post('/trigger/scrape', async (req, res) => {
-    addLog('info', 'Manual scrape triggered');
+    const { location } = req.body;
+    addLog('info', `Manual scrape triggered${location ? ` (Target: ${location})` : ''}`);
     try {
-        const result = await runScrape(addLog);
+        const result = await runScrape(addLog, { targetLocation: location });
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Scrape failed: ${error.message}`);
@@ -97,6 +98,8 @@ app.post('/trigger/scrape', async (req, res) => {
 
 app.post('/trigger/dispatch/:window', async (req, res) => {
     const window = req.params.window as 'morning' | 'lunch' | 'evening';
+    const { filters } = req.body; // Extract filters
+
     if (!['morning', 'lunch', 'evening'].includes(window)) {
         return res.status(400).json({ error: 'Invalid window' });
     }
@@ -107,12 +110,15 @@ app.post('/trigger/dispatch/:window', async (req, res) => {
         return res.status(409).json({ error: `Dispatch already in progress for ${currentDispatchWindow}` });
     }
 
-    addLog('info', `Manual dispatch triggered for ${window}`);
+    // Log filters if present
+    const filterLog = filters ? ` (Filters: ${JSON.stringify(filters)})` : '';
+    addLog('info', `Manual dispatch triggered for ${window}${filterLog}`);
+
     dispatchInProgress = true;
     currentDispatchWindow = window;
 
     try {
-        const result = await runDispatch(window, addLog);
+        const result = await runDispatch(window, addLog, { filters });
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Dispatch failed: ${error.message}`);
@@ -205,7 +211,7 @@ app.post('/trigger/dispatch-backlog', async (req, res) => {
 app.post('/trigger/test-scrape', async (req, res) => {
     addLog('info', '🧪 TEST scrape triggered (3 leads only)');
     try {
-        const result = await runScrape(addLog, 3); // Pass limit
+        const result = await runScrape(addLog, { limit: 3 }); // Pass limit
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Test scrape failed: ${error.message}`);
@@ -216,7 +222,7 @@ app.post('/trigger/test-scrape', async (req, res) => {
 app.post('/trigger/test-dispatch', async (req, res) => {
     addLog('info', '🧪 TEST dispatch triggered (3 messages only)');
     try {
-        const result = await runDispatch('morning', addLog, 3); // Pass limit
+        const result = await runDispatch('morning', addLog, { limit: 3 }); // Pass limit
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Test dispatch failed: ${error.message}`);
