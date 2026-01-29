@@ -44,6 +44,14 @@ interface CronTime {
   minute: number;
 }
 
+export type ConfigStatus = 'morning' | 'lunch' | 'evening' | 'off';
+
+interface DispatchConfig {
+    active_types: Record<string, ConfigStatus>;
+    quotas: { morning: number; lunch: number; evening: number };
+    updatedAt: string;
+}
+
 interface SystemSettings {
   testMode: boolean;
   testPhone: string;
@@ -108,6 +116,10 @@ export function MonitorClient() {
   const [targetBusinessType, setTargetBusinessType] = useState('');
   const [scrapeLimit, setScrapeLimit] = useState<number | ''>('');
   const [dispatchLimit, setDispatchLimit] = useState<number | ''>('');
+  
+  // Dispatch Configuration State
+  const [dispatchConfig, setDispatchConfig] = useState<DispatchConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(false);
 
   // Helper: action with timeout
   const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -400,6 +412,45 @@ export function MonitorClient() {
   useEffect(() => {
     fetchReservePool();
   }, [status.status]);
+
+  // Fetch dispatch config
+  const fetchConfig = async () => {
+    setConfigLoading(true);
+    try {
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+      const res = await fetch(`${workerUrl}/config/dispatch`);
+      const data = await res.json();
+      setDispatchConfig(data);
+    } catch (err) {
+      console.error("Failed to fetch config:", err);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  const updateConfigType = async (type: string, status: ConfigStatus) => {
+    if (!dispatchConfig) return;
+    
+    // Optimistic update
+    const newConfig = { ...dispatchConfig, active_types: { ...dispatchConfig.active_types, [type]: status } };
+    setDispatchConfig(newConfig);
+
+    try {
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+      await fetch(`${workerUrl}/config/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active_types: newConfig.active_types })
+      });
+    } catch (err) {
+      console.error("Failed to update config:", err);
+      fetchConfig();
+    }
+  };
 
   // Enable/disable notifications
   const handleToggleNotifications = async () => {
@@ -1450,109 +1501,73 @@ export function MonitorClient() {
         </button>
       </div> */}
 
-      {/* Targeted Operations */}
+      {/* Dispatch Configuration */}
       <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
-        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Target className="w-3 h-3" /> Targeted Operations
-        </h3>
-        
-        {/* Inputs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <div className="md:col-span-1 space-y-2">
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Target Location</label>
-                <input 
-                    type="text" 
-                    value={targetLocation}
-                    onChange={(e) => setTargetLocation(e.target.value)}
-                    placeholder="e.g. Ntinda"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20"
-                />
+        <div className="flex items-center justify-between mb-4">
+             <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+               <Settings className="w-3 h-3" /> Dispatch Configuration
+             </h3>
+             <button 
+                onClick={handleStart} 
+                disabled={loading !== null || !settings.dispatchEnabled}
+                className="flex items-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
+             >
+                {loading === 'start' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                Dispatch Now (Auto)
+             </button>
+        </div>
+
+        {configLoading || !dispatchConfig ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-600" /></div>
+        ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Object.entries(dispatchConfig.active_types).map(([type, status]) => (
+                    <div key={type} className="flex items-center justify-between bg-black/20 border border-white/5 rounded-xl p-3">
+                        <span className="text-xs font-medium text-zinc-300 capitalize">{type.replace('_', ' ')}</span>
+                        <select
+                            value={status}
+                            onChange={(e) => updateConfigType(type, e.target.value as ConfigStatus)}
+                            className={`text-[10px] font-bold uppercase tracking-wide bg-transparent border-none focus:ring-0 cursor-pointer ${
+                                status === 'off' ? 'text-zinc-500' :
+                                status === 'morning' ? 'text-blue-400' :
+                                status === 'lunch' ? 'text-amber-400' :
+                                'text-indigo-400'
+                            }`}
+                        >
+                            <option value="off">Off</option>
+                            <option value="morning">Morning</option>
+                            <option value="lunch">Lunch</option>
+                            <option value="evening">Evening</option>
+                        </select>
+                    </div>
+                ))}
             </div>
-            <div className="md:col-span-1 space-y-2">
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Business Type</label>
+        )}
+        
+        {/* Manual Override Section */}
+        <div className="mt-4 pt-4 border-t border-white/5">
+             <div className="flex items-center gap-2 mb-2">
+                 <span className="text-[10px] font-bold text-zinc-500 uppercase">Manual Override</span>
+             </div>
+             <div className="flex gap-2">
                 <select 
                     value={targetBusinessType}
                     onChange={(e) => setTargetBusinessType(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20 appearance-none"
+                    className="bg-black/20 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-white/20"
                 >
-                    <option value="">All Types</option>
-                    <option value="pr_firm">PR Firm</option>
-                    <option value="charity">Charity</option>
-                    <option value="private_clinic">Private Clinic</option>
-                    <option value="clinic">Clinic</option>
-                    <option value="dental">Dental</option>
-                    <option value="law">Law Firm</option>
-                    <option value="school">School</option>
-                    <option value="realtor">Realtor</option>
-                    <option value="restaurant">Restaurant</option>
-                    <option value="restaurant_evening">Restaurant (Eve)</option>
-                    <option value="bar">Bar</option>
-                    <option value="salon">Salon</option>
-                    <option value="gym">Gym</option>
-                    <option value="pharmacy">Pharmacy</option>
-                    <option value="courier">Courier</option>
-                    <option value="mechanic">Mechanic</option>
-                    <option value="hotel">Hotel</option>
-                    <option value="ecommerce">E-commerce</option>
+                    <option value="">Select Type...</option>
+                    {Object.keys(dispatchConfig?.active_types || {}).map(t => (
+                        <option key={t} value={t}>{t.replace('_', ' ')}</option>
+                    ))}
                 </select>
-            </div>
-             <div className="md:col-span-1 space-y-2">
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Scrape Limit</label>
-                <input 
-                    type="number" 
-                    value={scrapeLimit}
-                    onChange={(e) => setScrapeLimit(e.target.value ? parseInt(e.target.value) : '')}
-                    placeholder={settings.testMode ? "Test Mode: 5" : "Default: Auto"}
-                    disabled={settings.testMode}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-            </div>
-            <div className="md:col-span-1 space-y-2">
-                <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Dispatch Limit</label>
-                <input 
-                    type="number" 
-                    value={dispatchLimit}
-                    onChange={(e) => setDispatchLimit(e.target.value ? parseInt(e.target.value) : '')}
-                    placeholder="Default: Window Quota"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-white/20"
-                />
-            </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-             <button
-                onClick={handleTriggerScrape}
-                disabled={loading === 'scrape' || !settings.scrapeEnabled}
-                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50 flex flex-col items-center justify-center gap-1"
-             >
-                <span>{loading === 'scrape' ? 'Scraping...' : 'Run Scrape'}</span>
-                {settings.testMode && <span className="text-[8px] bg-purple-500/20 px-1 rounded">TEST MODE (Max 5)</span>}
-             </button>
-
-             <button
-                onClick={() => triggerDispatch('morning')}
-                disabled={(loading && loading.startsWith('dispatch')) || !settings.dispatchEnabled}
-                className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
-             >
-                Dispatch Morn
-             </button>
-
-             <button
-                onClick={() => triggerDispatch('lunch')}
-                disabled={(loading && loading.startsWith('dispatch')) || !settings.dispatchEnabled}
-                className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
-             >
-                Dispatch Lunch
-             </button>
-
-             <button
-                onClick={() => triggerDispatch('evening')}
-                disabled={(loading && loading.startsWith('dispatch')) || !settings.dispatchEnabled}
-                className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 p-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-50"
-             >
-                Dispatch Eve
-             </button>
+                <button
+                    onClick={() => triggerDispatch(getCurrentWindow())}
+                    disabled={!targetBusinessType || loading !== null}
+                    className="bg-zinc-700 hover:bg-zinc-600 text-zinc-200 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide disabled:opacity-50"
+                >
+                    Dispatch Just This
+                </button>
+             </div>
         </div>
       </div>
 

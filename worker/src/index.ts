@@ -33,6 +33,7 @@ for (const envPath of envPaths) {
 import { initializeFirebase, getWorkerStatus, updateWorkerStatus } from './firebase';
 import { runScrape } from './scrape-runner';
 import { runDispatch, runBacklogDispatch } from './dispatch-runner';
+import { getDispatchConfig, updateDispatchConfig } from './config-manager';
 
 const app = express();
 const PORT = process.env.WORKER_PORT || 4000;
@@ -249,6 +250,29 @@ app.post('/trigger/test-telegram', async (req, res) => {
         const { sendTestNotification } = await import('./telegram');
         const success = await sendTestNotification();
         res.json({ success, message: success ? 'Check Telegram!' : 'Failed to send' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// CONFIGURATION
+// ============================================
+
+app.get('/config/dispatch', async (req, res) => {
+    try {
+        const config = await getDispatchConfig();
+        res.json(config);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/config/dispatch', async (req, res) => {
+    try {
+        const updates = req.body;
+        const config = await updateDispatchConfig(updates);
+        res.json({ success: true, config });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }

@@ -10,6 +10,7 @@ import { markPhoneUsed, isPhoneUsed } from './deduplication';
 import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './telegram';
 import { pullFromReservePool } from './reserve-pool';
 import { QueuedLead } from '../../shared/types';
+import { getDispatchConfig } from './config-manager';
 
 type LogFn = (level: string, message: string) => void;
 type TimeWindow = 'morning' | 'lunch' | 'evening';
@@ -28,6 +29,7 @@ export async function runDispatch(
     const { limit, dryRun = false, filters } = options;
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
+    const config = await getDispatchConfig();
 
     // Check test mode
     const testSettings = await getTestSettings();
@@ -171,9 +173,21 @@ export async function runDispatch(
         return { success: true, sentCount: 0 };
     }
 
-    // Deduplicate by phone number (in-batch)
+    // Deduplicate and Filter by Config
     const seenPhones = new Set<string>();
     const uniqueLeads = collectedLeads.filter(lead => {
+        // 1. Config Check
+        const type = lead.businessType || '';
+        const configuredStatus = config.active_types[type];
+
+        if (!configuredStatus || configuredStatus === 'off') {
+            return false;
+        }
+        if (configuredStatus !== window) {
+            return false;
+        }
+
+        // 2. Dedupe
         const phone = lead.phone?.replace(/\D/g, '');
         if (!phone || seenPhones.has(phone)) {
             return false;
@@ -312,6 +326,7 @@ export async function runBacklogDispatch(
 
     // Check test mode
     const testSettings = await getTestSettings();
+    const config = await getDispatchConfig();
     // User Request: Test Result should use REAL data source but intercept output
     const collectionName = 'leads_queue';
 
@@ -420,9 +435,21 @@ export async function runBacklogDispatch(
         return { success: true, sentCount: 0, backlogCount: 0, reserveCount: 0 };
     }
 
-    // Deduplicate by phone (in-batch)
+    // Deduplicate and Filter by Config
     const seenPhones = new Set<string>();
     const uniqueLeads = collectedLeads.filter(lead => {
+        // 1. Config Check
+        const type = lead.businessType || '';
+        const configuredStatus = config.active_types[type];
+
+        if (!configuredStatus || configuredStatus === 'off') {
+            return false;
+        }
+        if (configuredStatus !== window) {
+            return false;
+        }
+
+        // 2. Dedupe
         const phone = lead.phone?.replace(/\D/g, '');
         if (!phone || seenPhones.has(phone)) return false;
         seenPhones.add(phone);

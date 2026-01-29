@@ -19,6 +19,7 @@ import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './telegram';
 import { getTodaysCity, getSuburbsForCity } from './location-rotation';
 import { isAvailableForScrape, markAsScraped } from './rotation-tracker';
 import { KEYWORD_MATRIX, getTodaysKeyword, getBusinessTypesForWindow, WINDOW_QUOTAS } from './keyword-matrix';
+import { getDispatchConfig } from './config-manager';
 
 type LogFn = (level: string, message: string) => void;
 
@@ -44,6 +45,7 @@ export async function runScrape(
     const today = new Date().toISOString().split('T')[0];
 
     const testSettings = await getTestSettings();
+    const config = await getDispatchConfig();
     let effectiveLimit = limit;
 
     if (testSettings.testMode) {
@@ -102,7 +104,13 @@ export async function runScrape(
             windowQuota = Math.min(remaining, windowQuota);
         }
 
-        let businessTypes = getBusinessTypesForWindow(window);
+        // Dynamic Business Types from Config
+        const activeTypesForWindow = Object.entries(config.active_types)
+            .filter(([_, status]) => status === window)
+            .map(([type]) => type);
+
+        // Filter matrix to get full definitions for these types
+        let businessTypes = KEYWORD_MATRIX.filter(bt => activeTypesForWindow.includes(bt.type));
 
         // Filter by target business type if specified
         if (targetBusinessType && targetBusinessType.trim().length > 0) {
