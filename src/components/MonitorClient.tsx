@@ -120,6 +120,7 @@ export function MonitorClient() {
   // Dispatch Configuration State
   const [dispatchConfig, setDispatchConfig] = useState<DispatchConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   // Helper: action with timeout
   const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -416,13 +417,16 @@ export function MonitorClient() {
   // Fetch dispatch config
   const fetchConfig = async () => {
     setConfigLoading(true);
+    setConfigError(null);
     try {
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
       const res = await fetch(`${workerUrl}/config/dispatch`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setDispatchConfig(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch config:", err);
+      setConfigError("Failed to load config. Worker may be offline or rebuilding.");
     } finally {
       setConfigLoading(false);
     }
@@ -1517,8 +1521,21 @@ export function MonitorClient() {
              </button>
         </div>
 
-        {configLoading || !dispatchConfig ? (
+        {configLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-600" /></div>
+        ) : configError ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+               <AlertCircle className="w-6 h-6 text-rose-500 mb-2" />
+               <p className="text-xs text-rose-400 font-medium mb-3">{configError}</p>
+               <button 
+                 onClick={fetchConfig}
+                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-2"
+               >
+                 <RefreshCw className="w-3 h-3" /> Retry
+               </button>
+            </div>
+        ) : !dispatchConfig ? (
+             <div className="flex justify-center py-8 text-zinc-600 text-xs">No configuration loaded</div>
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {Object.entries(dispatchConfig.active_types).map(([type, status]) => (
