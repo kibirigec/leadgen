@@ -85,10 +85,23 @@ app.get('/health', (req, res) => {
 // ============================================
 
 app.post('/trigger/scrape', async (req, res) => {
-    const { location } = req.body;
-    addLog('info', `Manual scrape triggered${location ? ` (Target: ${location})` : ''}`);
+    const { location, limit, businessType } = req.body;
+
+    // Build log message with all parameters
+    const params = [];
+    if (location) params.push(`Target: ${location}`);
+    if (businessType) params.push(`Type: ${businessType}`);
+    if (limit) params.push(`Limit: ${limit}`);
+    const paramStr = params.length > 0 ? ` (${params.join(', ')})` : '';
+
+    addLog('info', `Manual scrape triggered${paramStr}`);
+
     try {
-        const result = await runScrape(addLog, { targetLocation: location });
+        const result = await runScrape(addLog, {
+            targetLocation: location,
+            targetBusinessType: businessType,
+            limit: limit ? Number(limit) : undefined
+        });
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Scrape failed: ${error.message}`);

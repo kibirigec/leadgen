@@ -433,6 +433,7 @@ export function MonitorClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           location: targetLocation,
+          businessType: targetBusinessType,
           limit: scrapeLimit || undefined 
         })
       });

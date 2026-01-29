@@ -37,9 +37,9 @@ interface ScrapedLead {
 
 export async function runScrape(
     log: LogFn,
-    options: { limit?: number; targetLocation?: string } = {}
+    options: { limit?: number; targetLocation?: string; targetBusinessType?: string } = {}
 ): Promise<{ success: boolean; totalScraped: number }> {
-    const { limit, targetLocation } = options;
+    const { limit, targetLocation, targetBusinessType } = options;
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
 
@@ -47,7 +47,7 @@ export async function runScrape(
     let effectiveLimit = limit;
 
     if (testSettings.testMode) {
-        log('info', `🧪 TEST MODE ACTIVE: Forcing limit to 5 leads.`);
+        log('info', `🧪 TEST MODE ACTIVE: Forcing global limit to 5 leads.`);
         effectiveLimit = 5;
     }
 
@@ -86,17 +86,44 @@ export async function runScrape(
 
     // Process each time window
     for (const windowName of ['morning', 'lunch', 'evening'] as const) {
-        const window = windowName as TimeWindow;
-        const windowQuota = WINDOW_QUOTAS[window];
-        const windowLimit = effectiveLimit ? Math.min(effectiveLimit, windowQuota) : windowQuota;
-        const businessTypes = getBusinessTypesForWindow(window);
+        // Check global limit first
+        if (effectiveLimit && totalQueued >= effectiveLimit) {
+            log('info', `\n🛑 Global limit reached (${effectiveLimit}). Stopping scrape.`);
+            break;
+        }
 
-        log('info', `\n📋 ${window.toUpperCase()} WINDOW (need ${windowLimit} leads)`);
+        const window = windowName as TimeWindow;
+        let windowQuota = WINDOW_QUOTAS[window];
+
+        // Adjust window quota based on remaining global limit
+        if (effectiveLimit) {
+            const remaining = effectiveLimit - totalQueued;
+            if (remaining <= 0) break;
+            windowQuota = Math.min(remaining, windowQuota);
+        }
+
+        let businessTypes = getBusinessTypesForWindow(window);
+
+        // Filter by target business type if specified
+        if (targetBusinessType && targetBusinessType.trim().length > 0) {
+            const originalCount = businessTypes.length;
+            businessTypes = businessTypes.filter(b => b.type === targetBusinessType);
+            if (businessTypes.length > 0) {
+                log('info', `\n🎯 Targeting filter: "${targetBusinessType}" (Window: ${window})`);
+            } else if (originalCount > 0) {
+                log('info', `\nℹ️ Skipping ${window} window (Target "${targetBusinessType}" not scheduled for this time)`);
+                continue;
+            }
+        }
+
+        if (businessTypes.length === 0) continue;
+
+        log('info', `\n📋 ${window.toUpperCase()} WINDOW (need ${windowQuota} leads)`);
         log('info', `   Business types: ${businessTypes.map(b => b.type).join(', ')}`);
 
         // Step 1: Pull from reserve pool first
         log('info', `  1️⃣ Checking reserve pool...`);
-        const reserveLeads = await pullFromReservePool(window, windowLimit);
+        const reserveLeads = await pullFromReservePool(window, windowQuota);
         log('info', `     Found ${reserveLeads.length} in reserve`);
 
         const leadsForQueue: ScrapedLead[] = reserveLeads.map(r => ({
@@ -111,7 +138,7 @@ export async function runScrape(
             priority: r.priority,
         }));
 
-        const stillNeeded = windowLimit - leadsForQueue.length;
+        const stillNeeded = windowQuota - leadsForQueue.length;
 
         // Step 2: Scrape if we need more
         if (stillNeeded > 0) {
@@ -217,32 +244,34 @@ export async function runScrape(
         }
 
         // Step 3: Save to leads_queue
-        log('info', `  4️⃣ Saving ${leadsForQueue.length} leads to queue`);
+        if (leadsForQueue.length > 0) {
+            log('info', `  4️⃣ Saving ${leadsForQueue.length} leads to queue`);
 
-        for (const lead of leadsForQueue) {
-            await db.collection('leads_queue').add({
-                name: lead.name,
-                phone: lead.phone,
-                address: lead.address,
-                businessType: lead.businessType,
-                keyword: lead.keyword,
-                city: lead.city,
-                suburb: lead.suburb,
-                timeWindow: window,
-                priority: lead.priority,
-                status: 'pending',
-                dispatchDate: today,
-                createdAt: new Date().toISOString(),
-            });
-            totalQueued++;
-            allScrapedLeads.push({ name: lead.name, phone: lead.phone });
+            for (const lead of leadsForQueue) {
+                await db.collection('leads_queue').add({
+                    name: lead.name,
+                    phone: lead.phone,
+                    address: lead.address,
+                    businessType: lead.businessType,
+                    keyword: lead.keyword,
+                    city: lead.city,
+                    suburb: lead.suburb,
+                    timeWindow: window,
+                    priority: lead.priority,
+                    status: 'pending',
+                    dispatchDate: today,
+                    createdAt: new Date().toISOString(),
+                });
+                totalQueued++;
+                allScrapedLeads.push({ name: lead.name, phone: lead.phone });
+            }
+
+            log('info', `  ✅ ${window}: ${leadsForQueue.length} queued`);
         }
 
-        log('info', `  ✅ ${window}: ${leadsForQueue.length} queued`);
-
-        // Check test limit
-        if (limit && totalQueued >= limit) {
-            log('info', `\n🧪 Test limit reached (${limit})`);
+        // Check global limit again (redundant but safe)
+        if (effectiveLimit && totalQueued >= effectiveLimit) {
+            log('info', `\n🛑 limit reached (${effectiveLimit}). Done.`);
             break;
         }
     }
