@@ -415,18 +415,19 @@ export function MonitorClient() {
   }, [status.status]);
 
   // Fetch dispatch config
+  // Fetch dispatch config
   const fetchConfig = async () => {
     setConfigLoading(true);
     setConfigError(null);
+    const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
     try {
-      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
       const res = await fetch(`${workerUrl}/config/dispatch`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setDispatchConfig(data);
     } catch (err: any) {
       console.error("Failed to fetch config:", err);
-      setConfigError("Failed to load config. Worker may be offline or rebuilding.");
+      setConfigError(`Failed to load config from ${workerUrl}. ${err.message}`);
     } finally {
       setConfigLoading(false);
     }
