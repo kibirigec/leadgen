@@ -13,6 +13,7 @@ import { getDb, getBotStatus, getTestSettings } from './firebase';
 import { getMessage } from './message-variants';
 import { isValidPhone, normalizePhone } from '../../shared/phone-utils';
 import { QueuedLead } from '../../shared/types';
+import type { Market } from '../../shared/types';
 
 puppeteer.use(StealthPlugin());
 
@@ -28,10 +29,11 @@ async function updateBotStatus(data: {
     totalLeads?: number;
     processedLeads?: number;
     errorCount?: number;
-}) {
+}, market: Market = 'UG') {
     try {
         const db = getDb();
-        await db.collection('system').doc('bot_status').set({
+        const docId = market === 'US' ? 'bot_status_US' : 'bot_status';
+        await db.collection('system').doc(docId).set({
             ...data,
             updatedAt: new Date().toISOString(),
         }, { merge: true });
@@ -41,12 +43,12 @@ async function updateBotStatus(data: {
     }
 }
 
-// Add log entry to Firestore (for /monitor dashboard)
-// Path matches frontend: system/bot_logs/entries
-async function addBotLog(type: 'info' | 'error' | 'warning', message: string, leadName?: string) {
+// Add log entry to Firestore (for /monitor dashboard) — market-aware
+async function addBotLog(type: 'info' | 'error' | 'warning', message: string, leadName?: string, market: Market = 'UG') {
     try {
         const db = getDb();
-        await db.collection('system').doc('bot_logs').collection('entries').add({
+        const docId = market === 'US' ? 'bot_logs_US' : 'bot_logs';
+        await db.collection('system').doc(docId).collection('entries').add({
             type,
             message,
             leadName: leadName || null,
@@ -59,9 +61,13 @@ async function addBotLog(type: 'info' | 'error' | 'warning', message: string, le
 
 export async function runWhatsAppBot(
     leads: Lead[],
-    log: LogFn
+    log: LogFn,
+    market: Market = 'UG'
 ): Promise<{ success: boolean; sentCount: number; contactedLeadIds: string[] }> {
-    const sessionDir = process.env.WWEB_SESSION_PATH || path.join(os.homedir(), '.wweb_session');
+    // Resolve session directory based on market
+    const sessionDir = market === 'US'
+        ? (process.env.WWEB_SESSION_PATH_US || path.join(os.homedir(), '.wweb_session_us'))
+        : (process.env.WWEB_SESSION_PATH || path.join(os.homedir(), '.wweb_session'));
 
     // Check test mode
     const testSettings = await getTestSettings();
@@ -69,15 +75,16 @@ export async function runWhatsAppBot(
 
     if (isTestMode) {
         log('info', `🧪 TEST MODE ACTIVE - All messages will go to: ${testSettings.testPhone}`);
-        await addBotLog('warning', `TEST MODE: Messages redirected to ${testSettings.testPhone}`);
+        await addBotLog('warning', `TEST MODE: Messages redirected to ${testSettings.testPhone}`, undefined, market);
     }
 
     log('info', `Starting bot with ${leads.length} leads`);
     log('info', `Session: ${sessionDir}`);
+    log('info', `Market: ${market}`);
 
     // Update dashboard status
-    await updateBotStatus({ status: 'starting', totalLeads: leads.length, processedLeads: 0, errorCount: 0 });
-    await addBotLog('info', `Bot starting with ${leads.length} leads${isTestMode ? ' [TEST MODE]' : ''}`);
+    await updateBotStatus({ status: 'starting', totalLeads: leads.length, processedLeads: 0, errorCount: 0 }, market);
+    await addBotLog('info', `Bot starting with ${leads.length} leads${isTestMode ? ' [TEST MODE]' : ''}`, undefined, market);
 
     let browser: any;
     let page: any;
@@ -132,7 +139,7 @@ export async function runWhatsAppBot(
     try {
         // Initial Launch
         await initBrowser();
-        await updateBotStatus({ status: 'running' });
+        await updateBotStatus({ status: 'running' }, market);
 
         // Process leads
         let splashLoopCount = 0;
@@ -146,31 +153,33 @@ export async function runWhatsAppBot(
             }
 
             const lead = leads[i];
-            const currentStatus = await getBotStatus();
+            const currentStatus = await getBotStatus(market);
+
 
             if (currentStatus === 'stopped') {
                 log('info', '🛑 Bot stopped by user');
-                await addBotLog('warning', 'Bot stopped by user');
+                await addBotLog('warning', 'Bot stopped by user', undefined, market);
                 break;
             }
+
 
             // Handle PAUSE - wait until resumed or stopped
             if (currentStatus === 'paused') {
                 log('info', '⏸️ Bot paused. Waiting to resume...');
-                await addBotLog('info', 'Bot paused by user');
+                await addBotLog('info', 'Bot paused by user', undefined, market);
                 let isPaused = true;
                 while (isPaused) {
                     await new Promise(r => setTimeout(r, 2000)); // Check every 2 seconds
                     const checkStatus = await getBotStatus();
                     if (checkStatus === 'stopped') {
                         log('info', '🛑 Bot stopped while paused');
-                        await addBotLog('warning', 'Bot stopped while paused');
+                        await addBotLog('warning', 'Bot stopped while paused', undefined, market);
                         await browser?.close();
                         return { success: true, sentCount, contactedLeadIds };
                     }
                     if (checkStatus !== 'paused') {
                         log('info', '▶️ Bot resumed');
-                        await addBotLog('info', 'Bot resumed');
+                        await addBotLog('info', 'Bot resumed', undefined, market);
                         isPaused = false;
                     }
                 }
@@ -185,9 +194,9 @@ export async function runWhatsAppBot(
                     processedLeads: sentCount,
                     totalLeads: leads.length,
                     errorCount,
-                });
+                }, market);
 
-                const message = getMessage(lead.name, lead.businessType || 'business');
+                const message = getMessage(lead.name, lead.businessType || 'business', market);
                 console.log(`[DEBUG] Phone check for: ${lead.phone}`);
                 if (!isValidPhone(lead.phone)) {
                     log('warning', `  ⚠️ Invalid phone: ${lead.phone} - skipping`);
@@ -197,7 +206,7 @@ export async function runWhatsAppBot(
 
                 // Override phone with test phone when in test mode
                 const actualPhone = isTestMode ? testSettings.testPhone : lead.phone;
-                const phoneNumber = normalizePhone(actualPhone);
+                const phoneNumber = normalizePhone(actualPhone, market);
 
                 if (isTestMode) {
                     log('info', `  🧪 [TEST] Sending to ${phoneNumber} instead of ${lead.phone}`);
@@ -367,7 +376,7 @@ export async function runWhatsAppBot(
                         pageContent.includes('phone number isn\'t on WhatsApp')) {
                         console.log(`[DEBUG] ✗ Error popup detected - number invalid/not on WhatsApp`);
                         log('warning', `  ⚠️ ${lead.name}: Number not on WhatsApp`);
-                        await addBotLog('warning', `${lead.name}: Number not on WhatsApp`);
+                        await addBotLog('warning', `${lead.name}: Number not on WhatsApp`, undefined, market);
                         break; // Don't retry, skip this lead
                     }
 
@@ -383,10 +392,10 @@ export async function runWhatsAppBot(
                     sentCount++;
                     contactedLeadIds.push(lead.id);
                     log('info', `✅ Sent to ${lead.name}`);
-                    await addBotLog('info', `Sent to ${lead.name}`);
+                    await addBotLog('info', `Sent to ${lead.name}`, undefined, market);
                 } else {
                     log('warning', `  ⚠️ Could not verify send for ${lead.name}`);
-                    await addBotLog('warning', `Failed to verify send for ${lead.name}`);
+                    await addBotLog('warning', `Failed to verify send for ${lead.name}`, undefined, market);
                     errorCount++;
                 }
 
@@ -405,7 +414,7 @@ export async function runWhatsAppBot(
                     error.message.includes('CRITICAL')) {
 
                     log('warning', '♻️ CRITICAL ERROR DETECTED: Restarting browser to recover...');
-                    await addBotLog('warning', 'Browser crashed/hung, performing auto-restart...');
+                    await addBotLog('warning', 'Browser crashed/hung, performing auto-restart...', undefined, market);
 
                     try {
                         await initBrowser();
@@ -423,6 +432,7 @@ export async function runWhatsAppBot(
         if (browser) await browser.close();
     }
 
-    await updateBotStatus({ status: 'idle', processedLeads: leads.length, totalLeads: leads.length, errorCount });
+    await updateBotStatus({ status: 'idle', processedLeads: leads.length, totalLeads: leads.length, errorCount }, market);
+
     return { success: true, sentCount, contactedLeadIds };
 }

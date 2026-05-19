@@ -1,5 +1,7 @@
 import { getDb } from './firebase';
 import { KEYWORD_MATRIX } from './keyword-matrix';
+import { US_KEYWORD_MATRIX } from './keyword-matrix-us';
+import type { Market } from '../../shared/types';
 
 // ==========================================
 // Types
@@ -21,56 +23,70 @@ export interface DispatchConfig {
 const DEFAULT_QUOTAS: Record<TimeWindow, number> = {
     morning: 30,
     lunch: 30,
-    evening: 40
+    evening: 40,
 };
+
+// ==========================================
+// Firestore doc name per market
+// ==========================================
+
+function getConfigDocName(market: Market): string {
+    return `dispatch_config_${market}`; // dispatch_config_UG or dispatch_config_US
+}
 
 // ==========================================
 // Config Manager
 // ==========================================
 
-export async function getDispatchConfig(): Promise<DispatchConfig> {
+export async function getDispatchConfig(market: Market = 'UG'): Promise<DispatchConfig> {
     const db = getDb();
-    const doc = await db.collection('system').doc('dispatch_config').get();
+    const docName = getConfigDocName(market);
+    const doc = await db.collection('system').doc(docName).get();
 
     if (doc.exists) {
         return doc.data() as DispatchConfig;
     }
 
-    // Initialize Default Config from KEYWORD_MATRIX
+    // Initialize default config from the correct keyword matrix
+    const matrix = market === 'US' ? US_KEYWORD_MATRIX : KEYWORD_MATRIX;
     const defaultActiveTypes: Record<string, ConfigStatus> = {};
-    for (const item of KEYWORD_MATRIX) {
+    for (const item of matrix) {
         defaultActiveTypes[item.type] = item.timeWindow as ConfigStatus;
     }
 
     const defaultConfig: DispatchConfig = {
         active_types: defaultActiveTypes,
         quotas: DEFAULT_QUOTAS,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
     };
 
     // Save default
-    await db.collection('system').doc('dispatch_config').set(defaultConfig);
+    await db.collection('system').doc(docName).set(defaultConfig);
     return defaultConfig;
 }
 
-export async function updateDispatchConfig(updates: Partial<DispatchConfig>): Promise<DispatchConfig> {
+export async function updateDispatchConfig(
+    market: Market = 'UG',
+    updates: Partial<DispatchConfig>
+): Promise<DispatchConfig> {
     const db = getDb();
+    const docName = getConfigDocName(market);
 
     // Get current to merge
-    const current = await getDispatchConfig();
+    const current = await getDispatchConfig(market);
 
     const newConfig = {
         ...current,
         ...updates,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
     };
 
-    await db.collection('system').doc('dispatch_config').set(newConfig);
+    await db.collection('system').doc(docName).set(newConfig);
     return newConfig;
 }
 
-export async function getActiveBusinessTypes(window: TimeWindow): Promise<string[]> {
-    const config = await getDispatchConfig();
+export async function getActiveBusinessTypes(window: TimeWindow, market: Market = 'UG'): Promise<string[]> {
+    const config = await getDispatchConfig(market);
     return Object.entries(config.active_types)
         .filter(([_, status]) => status === window)
         .map(([type]) => type);

@@ -7,6 +7,7 @@ import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettin
 import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock, ChevronUp, ChevronDown, Target, HelpCircle } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
+import { USLocationPicker } from "./USLocationPicker";
 
 interface BotStatus {
   status: string;
@@ -63,6 +64,18 @@ interface SystemSettings {
     lunch: CronTime;
     evening: CronTime;
   };
+  ugEnabled: boolean;
+  usEnabled: boolean;
+  usScrapeEnabled: boolean;
+  usDispatchEnabled: boolean;
+  usTestMode: boolean;
+  usTestPhone: string;
+  usCronTimes: {
+    scrape: CronTime;
+    morning: CronTime;
+    lunch: CronTime;
+    evening: CronTime;
+  };
 }
 
 const DEFAULT_CRON_TIMES = {
@@ -95,9 +108,17 @@ export function MonitorClient() {
     scrapeEnabled: true, 
     dispatchEnabled: true,
     cronTimes: DEFAULT_CRON_TIMES,
+    ugEnabled: true,
+    usEnabled: false,
+    usScrapeEnabled: true,
+    usDispatchEnabled: true,
+    usTestMode: false,
+    usTestPhone: "",
+    usCronTimes: DEFAULT_CRON_TIMES,
   });
   const [showTestSettings, setShowTestSettings] = useState(false);
   const [testPhoneInput, setTestPhoneInput] = useState("");
+  const [market, setMarket] = useState<'UG' | 'US'>('UG');
 
   // Time picker modal state
   const [timePickerOpen, setTimePickerOpen] = useState(false);
@@ -150,13 +171,14 @@ export function MonitorClient() {
     try {
       const today = new Date().toISOString().split('T')[0];
       const currentWindow = getCurrentWindow();
+      const collectionName = market === 'US' ? 'leads_queue_US' : 'leads_queue';
       
       let q;
       if (type === 'contacted') {
         if (windowFilter) {
           // Show contacted for specific window
           q = query(
-            collection(clientDb, "leads_queue"),
+            collection(clientDb, collectionName),
             where("status", "==", "sent"),
             where("timeWindow", "==", windowFilter),
             limit(50)
@@ -164,7 +186,7 @@ export function MonitorClient() {
         } else {
           // Show ALL contacted (total)
           q = query(
-            collection(clientDb, "leads_queue"),
+            collection(clientDb, collectionName),
             where("status", "==", "sent"),
             limit(50)
           );
@@ -180,7 +202,7 @@ export function MonitorClient() {
         // Show backlog (pending from previous days OR missing date)
         // Note: We avoid filtering by date in Firestore because it hides docs with missing/null dates.
         q = query(
-          collection(clientDb, "leads_queue"),
+          collection(clientDb, collectionName),
           where("status", "==", "pending"),
           limit(300) // Increase limit to potentially catch mixed backlog + today
         );
@@ -190,7 +212,7 @@ export function MonitorClient() {
         // Show pending for current window (TODAY ONLY)
         const targetWindow = windowFilter || currentWindow;
         q = query(
-          collection(clientDb, "leads_queue"),
+          collection(clientDb, collectionName),
           where("dispatchDate", "==", today),
           where("timeWindow", "==", targetWindow),
           where("status", "==", "pending"),
@@ -205,6 +227,8 @@ export function MonitorClient() {
         // Client-side filter: Remove leads scheduled for today
         // This keeps leads with missing dates or past dates
         leads = leads.filter(l => l.dispatchDate !== today).slice(0, 50);
+      } else {
+        // No market filter needed since collections are isolated
       }
       
       setDetailedLeads(leads);
@@ -218,7 +242,8 @@ export function MonitorClient() {
   // Fetch lead stats from leads_queue collection
   const fetchLeadStats = async () => {
     try {
-      const queueRef = collection(clientDb, 'leads_queue');
+      const collectionName = market === 'US' ? 'leads_queue_US' : 'leads_queue';
+      const queueRef = collection(clientDb, collectionName);
       const currentWindow = getCurrentWindow();
       
       const today = new Date().toISOString().split('T')[0];
@@ -276,11 +301,16 @@ export function MonitorClient() {
         }
       });
       
+      // Calculate correct backlogs + total contacted for this market
+      const pendingMarketSize = pendingSnap.size;
+      
+      const sentMarketSize = sentSnap.size;
+      
       setLeadStats({
         sentToday,
         pendingToday,
-        totalContacted: sentSnap.size,
-        backlog: pendingSnap.size - pendingToday
+        totalContacted: sentMarketSize,
+        backlog: pendingMarketSize - pendingToday
       });
       setWindowStats(windows);
     } catch (err) {
@@ -291,17 +321,20 @@ export function MonitorClient() {
   // Initial fetch and refresh on status change
   useEffect(() => {
     fetchLeadStats();
-  }, [status.processedLeads]);
+  }, [status.processedLeads, market]);
 
   // Subscribe to bot status
   useEffect(() => {
+    const docId = market === 'US' ? 'bot_status_US' : 'bot_status';
     const unsubscribe = onSnapshot(
-      doc(clientDb, "system", "bot_status"),
+      doc(clientDb, "system", docId),
       (snapshot) => {
         setIsConnected(true);
         setConnectionError(null);
         if (snapshot.exists()) {
           setStatus(snapshot.data() as BotStatus);
+        } else {
+          setStatus({ status: "idle" });
         }
       },
       (err) => {
@@ -311,12 +344,13 @@ export function MonitorClient() {
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [market]);
 
   // Subscribe to bot logs
   useEffect(() => {
+    const docId = market === 'US' ? 'bot_logs_US' : 'bot_logs';
     const logsQuery = query(
-      collection(clientDb, "system", "bot_logs", "entries"),
+      collection(clientDb, "system", docId, "entries"),
       orderBy("timestamp", "desc"),
       limit(50)
     );
@@ -335,7 +369,7 @@ export function MonitorClient() {
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [market]);
 
   // Subscribe to settings
   useEffect(() => {
@@ -355,13 +389,25 @@ export function MonitorClient() {
               lunch: data.cronTimes?.lunch ?? DEFAULT_CRON_TIMES.lunch,
               evening: data.cronTimes?.evening ?? DEFAULT_CRON_TIMES.evening,
             },
+            ugEnabled: data.ugEnabled ?? true,
+            usEnabled: data.usEnabled ?? false,
+            usScrapeEnabled: data.usScrapeEnabled ?? true,
+            usDispatchEnabled: data.usDispatchEnabled ?? true,
+            usTestMode: data.usTestMode ?? false,
+            usTestPhone: data.usTestPhone ?? "",
+            usCronTimes: {
+              scrape: data.usCronTimes?.scrape ?? DEFAULT_CRON_TIMES.scrape,
+              morning: data.usCronTimes?.morning ?? DEFAULT_CRON_TIMES.morning,
+              lunch: data.usCronTimes?.lunch ?? DEFAULT_CRON_TIMES.lunch,
+              evening: data.usCronTimes?.evening ?? DEFAULT_CRON_TIMES.evening,
+            },
           });
-          setTestPhoneInput(data.testPhone ?? "");
+          setTestPhoneInput(market === 'US' ? (data.usTestPhone ?? "") : (data.testPhone ?? ""));
         }
-      }
+      },
     );
     return () => unsubscribe();
-  }, []);
+  }, [market]);
 
   // Clear error after 3 seconds
   useEffect(() => {
@@ -391,7 +437,8 @@ export function MonitorClient() {
   // Fetch reserve pool stats
   const fetchReservePool = async () => {
     try {
-      const poolRef = collection(clientDb, 'reserve_pool');
+      const collectionName = market === 'US' ? 'reserve_pool_US' : 'reserve_pool';
+      const poolRef = collection(clientDb, collectionName);
       const snapshot = await getDocs(query(poolRef, where('status', '==', 'available')));
       
       const stats = { morning: 0, lunch: 0, evening: 0, total: 0 };
@@ -412,7 +459,7 @@ export function MonitorClient() {
   // Fetch reserve pool on mount and after scrapes
   useEffect(() => {
     fetchReservePool();
-  }, [status.status]);
+  }, [status.status, market]);
 
   // Fetch dispatch config
   // Fetch dispatch config
@@ -421,7 +468,7 @@ export function MonitorClient() {
     setConfigError(null);
     const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
     try {
-      const res = await fetch(`${workerUrl}/config/dispatch`);
+      const res = await fetch(`${workerUrl}/config/dispatch?market=${market}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setDispatchConfig(data);
@@ -435,7 +482,7 @@ export function MonitorClient() {
 
   useEffect(() => {
     fetchConfig();
-  }, []);
+  }, [market]);
 
   const updateConfigType = async (type: string, status: ConfigStatus) => {
     if (!dispatchConfig) return;
@@ -446,7 +493,7 @@ export function MonitorClient() {
 
     try {
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-      await fetch(`${workerUrl}/config/dispatch`, {
+      await fetch(`${workerUrl}/config/dispatch?market=${market}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active_types: newConfig.active_types })
@@ -490,7 +537,8 @@ export function MonitorClient() {
         body: JSON.stringify({ 
           location: targetLocation,
           businessType: targetBusinessType,
-          limit: scrapeLimit || undefined 
+          limit: scrapeLimit || undefined,
+          market
         })
       });
       const data = await res.json();
@@ -518,7 +566,8 @@ export function MonitorClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           filters,
-          limit: dispatchLimit || undefined
+          limit: dispatchLimit || undefined,
+          market
         })
       });
       const data = await res.json();
@@ -555,7 +604,11 @@ export function MonitorClient() {
     }
     setLoading('testmode');
     try {
-      await setTestMode(true, testPhoneInput);
+      if (market === 'US') {
+        await import('@/actions/bot').then(m => m.setUsTestMode(true, testPhoneInput));
+      } else {
+        await setTestMode(true, testPhoneInput);
+      }
       setShowTestSettings(false);
     } catch (err: any) {
       setError(err.message || 'Failed to enable test mode');
@@ -572,6 +625,8 @@ export function MonitorClient() {
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
       const response = await fetch(`${workerUrl}/trigger/dispatch-current`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market })
       });
       if (!response.ok) {
         const data = await response.json();
@@ -591,7 +646,7 @@ export function MonitorClient() {
     setLoading("pause");
     setError(null);
     try {
-      await withTimeout(pauseBotAction(), 15000);
+      await withTimeout(pauseBotAction(market), 15000);
     } catch (err: any) {
       console.error("Failed to pause:", err);
       setError(err.message || "Failed to pause");
@@ -604,7 +659,7 @@ export function MonitorClient() {
     setLoading("resume");
     setError(null);
     try {
-      await withTimeout(resumeBotAction(), 15000);
+      await withTimeout(resumeBotAction(market), 15000);
     } catch (err: any) {
       console.error("Failed to resume:", err);
       setError(err.message || "Failed to resume");
@@ -617,7 +672,7 @@ export function MonitorClient() {
     setLoading("stop");
     setError(null);
     try {
-      await withTimeout(stopBotAction(), 15000);
+      await withTimeout(stopBotAction(market), 15000);
     } catch (err: any) {
       console.error("Failed to stop:", err);
       setError(err.message || "Failed to stop");
@@ -629,7 +684,7 @@ export function MonitorClient() {
   const handleClearLogs = async () => {
     setLoading("clear");
     try {
-      await withTimeout(clearBotLogs(), 15000);
+      await withTimeout(clearBotLogs(market), 15000);
     } catch (err: any) {
       console.error("Failed to clear logs:", err);
       setError(err.message || "Failed to clear");
@@ -641,7 +696,11 @@ export function MonitorClient() {
   const handleSaveTime = async () => {
     setLoading('timepicker');
     try {
-      await setCronTime(timePickerTarget, timePickerHour, timePickerMinute);
+      if (market === 'US') {
+        await import('@/actions/bot').then(m => m.setUsCronTime(timePickerTarget as any, timePickerHour, timePickerMinute));
+      } else {
+        await setCronTime(timePickerTarget as any, timePickerHour, timePickerMinute);
+      }
       
       // Auto-apply scheduling changes
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
@@ -661,9 +720,13 @@ export function MonitorClient() {
     setLoading('backlog');
     try {
       const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-      const response = await fetch(`${workerUrl}/trigger/dispatch-backlog`, { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
+      const res = await fetch(`${workerUrl}/trigger/dispatch-backlog?limit=30`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -719,6 +782,10 @@ export function MonitorClient() {
     );
   }
 
+  const currentCronTimes = market === 'US' ? settings.usCronTimes : settings.cronTimes;
+  const currentScrapeEnabled = market === 'US' ? settings.usScrapeEnabled : settings.scrapeEnabled;
+  const currentDispatchEnabled = market === 'US' ? settings.usDispatchEnabled : settings.dispatchEnabled;
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-200 p-4 max-w-lg mx-auto pb-24 font-sans selection:bg-zinc-800">
       {/* Error Toast */}
@@ -729,13 +796,74 @@ export function MonitorClient() {
         </div>
       )}
 
+      {/* Market Selector Tabs */}
+      <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4">
+        <button
+          onClick={() => setMarket('UG')}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+            market === 'UG' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+          }`}
+        >
+          🇺🇬 Uganda
+        </button>
+        <button
+          onClick={() => setMarket('US')}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+            market === 'US' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+          }`}
+        >
+          🇺🇸 United States
+        </button>
+      </div>
+
+      {/* Market Master Toggle Warning */}
+      {market === 'UG' && !settings.ugEnabled && (
+        <div className="mb-4 bg-zinc-800/80 border border-zinc-700 rounded-xl p-3 flex justify-between items-center text-zinc-400 text-sm">
+          <span>🇺🇬 Uganda Market is currently OFF</span>
+          <button onClick={() => import('@/actions/bot').then(m => m.setUgEnabled(true))} className="text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-lg">Turn ON</button>
+        </div>
+      )}
+      {market === 'US' && !settings.usEnabled && (
+        <div className="mb-4 bg-zinc-800/80 border border-zinc-700 rounded-xl p-3 flex justify-between items-center text-zinc-400 text-sm">
+          <span>🇺🇸 US Market is currently OFF</span>
+          <button onClick={() => import('@/actions/bot').then(m => m.setUsEnabled(true))} className="text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-lg">Turn ON</button>
+        </div>
+      )}
+
+      {/* US WhatsApp Login Trigger */}
+      {market === 'US' && (
+        <div className="mb-4 bg-zinc-800/80 border border-zinc-700 rounded-xl p-3 flex justify-between items-center text-zinc-400 text-sm">
+          <div className="flex items-center gap-2">
+            <Rocket className="w-4 h-4 text-zinc-400" />
+            <span>US WhatsApp Session</span>
+          </div>
+          <button 
+            onClick={async () => {
+              setLoading('login-us');
+              try {
+                const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
+                await fetch(`${workerUrl}/trigger/dispatch-current`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ market: 'US' })
+                });
+              } catch (err) {}
+              setLoading(null);
+            }} 
+            className="text-blue-400 bg-blue-500/10 px-3 py-1 rounded-lg"
+          >
+            {loading === 'login-us' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Login Headless'}
+          </button>
+        </div>
+      )}
+
       {/* Test Mode Banner */}
-      {settings.testMode && (
+      {(market === 'US' ? settings.usTestMode : settings.testMode) && (
         <div className="mb-4 bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 flex items-center gap-3">
           <FlaskConical className="w-5 h-5 text-orange-400" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-orange-400">🧪 TEST MODE ACTIVE</p>
-            <p className="text-xs text-orange-400/70">Messages → {settings.testPhone}</p>
+            <p className="text-xs text-orange-400/70">Messages → {market === 'US' ? settings.usTestPhone : settings.testPhone}</p>
           </div>
           <button 
             onClick={handleToggleTestMode}
@@ -761,48 +889,81 @@ export function MonitorClient() {
           <button
             onClick={async () => {
               setLoading('scrape-toggle');
-              await setScrapeEnabled(!settings.scrapeEnabled);
+              if (market === 'US') {
+                await import('@/actions/bot').then(m => m.setUsScrapeEnabled(!settings.usScrapeEnabled));
+              } else {
+                await setScrapeEnabled(!settings.scrapeEnabled);
+              }
               setLoading(null);
             }}
             className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-              settings.scrapeEnabled 
+              (market === 'US' ? settings.usScrapeEnabled : settings.scrapeEnabled) 
                 ? 'bg-purple-500/20 text-purple-400 border border-purple-500/20' 
                 : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50 hover:bg-zinc-800'
             }`}
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${settings.scrapeEnabled ? 'bg-purple-500 animate-pulse' : 'bg-zinc-600'}`} />
-            <span className="truncate">{settings.scrapeEnabled ? 'Scrape Active' : 'Scrape Paused'}</span>
+            <div className={`w-1.5 h-1.5 rounded-full ${(market === 'US' ? settings.usScrapeEnabled : settings.scrapeEnabled) ? 'bg-purple-500 animate-pulse' : 'bg-zinc-600'}`} />
+            <span className="truncate">{(market === 'US' ? settings.usScrapeEnabled : settings.scrapeEnabled) ? 'Scrape Active' : 'Scrape Paused'}</span>
           </button>
 
           {/* Dispatch Toggle */}
           <button
             onClick={async () => {
               setLoading('dispatch-toggle');
-              await setDispatchEnabled(!settings.dispatchEnabled);
+              if (market === 'US') {
+                await import('@/actions/bot').then(m => m.setUsDispatchEnabled(!settings.usDispatchEnabled));
+              } else {
+                await setDispatchEnabled(!settings.dispatchEnabled);
+              }
               setLoading(null);
             }}
             className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-              settings.dispatchEnabled 
+              (market === 'US' ? settings.usDispatchEnabled : settings.dispatchEnabled)
                 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/20' 
                 : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50 hover:bg-zinc-800'
             }`}
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-blue-500 animate-pulse' : 'bg-zinc-600'}`} />
-            <span className="truncate">{settings.dispatchEnabled ? 'Dispatch Active' : 'Dispatch Paused'}</span>
+            <div className={`w-1.5 h-1.5 rounded-full ${(market === 'US' ? settings.usDispatchEnabled : settings.dispatchEnabled) ? 'bg-blue-500 animate-pulse' : 'bg-zinc-600'}`} />
+            <span className="truncate">{(market === 'US' ? settings.usDispatchEnabled : settings.dispatchEnabled) ? 'Dispatch Active' : 'Dispatch Paused'}</span>
           </button>
 
           {/* Test Mode Toggle */}
           <button
             onClick={handleToggleTestMode}
             className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-              settings.testMode 
+              (market === 'US' ? settings.usTestMode : settings.testMode) 
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20' 
                 : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50 hover:bg-zinc-800'
             }`}
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${settings.testMode ? 'bg-orange-500 animate-pulse' : 'bg-zinc-600'}`} />
-            <span className="truncate">{settings.testMode ? 'Test Mode On' : 'Test Mode Off'}</span>
+            <div className={`w-1.5 h-1.5 rounded-full ${(market === 'US' ? settings.usTestMode : settings.testMode) ? 'bg-orange-500 animate-pulse' : 'bg-zinc-600'}`} />
+            <span className="truncate">{(market === 'US' ? settings.usTestMode : settings.testMode) ? 'Test Mode On' : 'Test Mode Off'}</span>
           </button>
+        </div>
+
+        {/* Location & Business Type Inputs */}
+        <div className="flex flex-col gap-3 mb-4 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
+          {market === 'US' ? (
+            <USLocationPicker 
+              value={targetLocation}
+              onChange={setTargetLocation}
+            />
+          ) : (
+            <input 
+              type="text"
+              placeholder="Target Location (e.g. Kampala)"
+              value={targetLocation}
+              onChange={e => setTargetLocation(e.target.value)}
+              className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-zinc-500"
+            />
+          )}
+          <input 
+            type="text"
+            placeholder="Business Type (e.g. hospital)"
+            value={targetBusinessType}
+            onChange={e => setTargetBusinessType(e.target.value)}
+            className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-zinc-500"
+          />
         </div>
         <div className="grid grid-cols-4 gap-3">
           <button
@@ -872,7 +1033,7 @@ export function MonitorClient() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <CalendarClock className="w-4 h-4 text-zinc-400" />
-            <span className="text-xs text-zinc-300 font-semibold uppercase tracking-wider">Automated Schedule (EAT)</span>
+            <span className="text-xs text-zinc-300 font-semibold uppercase tracking-wider">Automated Schedule ({market === 'US' ? 'UTC' : 'EAT'})</span>
           </div>
           <span className="text-[10px] text-zinc-500 bg-zinc-800/50 px-2 py-0.5 rounded-full">Click time to edit</span>
         </div>
@@ -880,88 +1041,88 @@ export function MonitorClient() {
           <button
             onClick={() => {
               setTimePickerTarget('scrape');
-              setTimePickerHour(settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour);
-              setTimePickerMinute(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute);
+              setTimePickerHour(currentCronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour);
+              setTimePickerMinute(currentCronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute);
               setTimePickerOpen(true);
             }}
             className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
-              settings.scrapeEnabled 
+              currentScrapeEnabled 
                 ? 'bg-zinc-900 border-purple-500/30 hover:border-purple-500/60 shadow-[0_0_15px_-3px_rgba(168,85,247,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
             }`}
           >
-            <div className={`text-lg font-mono font-bold mb-1 ${settings.scrapeEnabled ? 'text-purple-400' : 'text-zinc-500'}`}>
-              {settings.cronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour}:{String(settings.cronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute).padStart(2, '0')}
+            <div className={`text-lg font-mono font-bold mb-1 ${currentScrapeEnabled ? 'text-purple-400' : 'text-zinc-500'}`}>
+              {currentCronTimes?.scrape?.hour ?? DEFAULT_CRON_TIMES.scrape.hour}:{String(currentCronTimes?.scrape?.minute ?? DEFAULT_CRON_TIMES.scrape.minute).padStart(2, '0')}
             </div>
             <div className="flex items-center justify-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${settings.scrapeEnabled ? 'bg-purple-500 animate-pulse' : 'bg-zinc-700'}`} />
-              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.scrapeEnabled ? 'text-purple-300' : 'text-zinc-600'}`}>Scrape</span>
+              <div className={`w-1.5 h-1.5 rounded-full ${currentScrapeEnabled ? 'bg-purple-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${currentScrapeEnabled ? 'text-purple-300' : 'text-zinc-600'}`}>Scrape</span>
             </div>
           </button>
 
           <button
             onClick={() => {
               setTimePickerTarget('morning');
-              setTimePickerHour(settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour);
-              setTimePickerMinute(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute);
+              setTimePickerHour(currentCronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour);
+              setTimePickerMinute(currentCronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute);
               setTimePickerOpen(true);
             }}
             className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
-              settings.dispatchEnabled 
+              currentDispatchEnabled 
                 ? 'bg-zinc-900 border-blue-500/30 hover:border-blue-500/60 shadow-[0_0_15px_-3px_rgba(59,130,246,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
             }`}
           >
-            <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-blue-400' : 'text-zinc-500'}`}>
-              {settings.cronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour}:{String(settings.cronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute).padStart(2, '0')}
+            <div className={`text-lg font-mono font-bold mb-1 ${currentDispatchEnabled ? 'text-blue-400' : 'text-zinc-500'}`}>
+              {currentCronTimes?.morning?.hour ?? DEFAULT_CRON_TIMES.morning.hour}:{String(currentCronTimes?.morning?.minute ?? DEFAULT_CRON_TIMES.morning.minute).padStart(2, '0')}
             </div>
             <div className="flex items-center justify-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-blue-500 animate-pulse' : 'bg-zinc-700'}`} />
-              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-blue-300' : 'text-zinc-600'}`}>Morning</span>
+              <div className={`w-1.5 h-1.5 rounded-full ${currentDispatchEnabled ? 'bg-blue-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${currentDispatchEnabled ? 'text-blue-300' : 'text-zinc-600'}`}>Morning</span>
             </div>
           </button>
 
           <button
             onClick={() => {
               setTimePickerTarget('lunch');
-              setTimePickerHour(settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour);
-              setTimePickerMinute(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute);
+              setTimePickerHour(currentCronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour);
+              setTimePickerMinute(currentCronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute);
               setTimePickerOpen(true);
             }}
             className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
-              settings.dispatchEnabled 
+              currentDispatchEnabled 
                 ? 'bg-zinc-900 border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_15px_-3px_rgba(245,158,11,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
             }`}
           >
-            <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-amber-400' : 'text-zinc-500'}`}>
-              {settings.cronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour}:{String(settings.cronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute).padStart(2, '0')}
+            <div className={`text-lg font-mono font-bold mb-1 ${currentDispatchEnabled ? 'text-amber-400' : 'text-zinc-500'}`}>
+              {currentCronTimes?.lunch?.hour ?? DEFAULT_CRON_TIMES.lunch.hour}:{String(currentCronTimes?.lunch?.minute ?? DEFAULT_CRON_TIMES.lunch.minute).padStart(2, '0')}
             </div>
             <div className="flex items-center justify-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-amber-500 animate-pulse' : 'bg-zinc-700'}`} />
-              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-amber-300' : 'text-zinc-600'}`}>Lunch</span>
+              <div className={`w-1.5 h-1.5 rounded-full ${currentDispatchEnabled ? 'bg-amber-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${currentDispatchEnabled ? 'text-amber-300' : 'text-zinc-600'}`}>Lunch</span>
             </div>
           </button>
 
           <button
             onClick={() => {
               setTimePickerTarget('evening');
-              setTimePickerHour(settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour);
-              setTimePickerMinute(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute);
+              setTimePickerHour(currentCronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour);
+              setTimePickerMinute(currentCronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute);
               setTimePickerOpen(true);
             }}
             className={`relative overflow-hidden group p-3 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center ${
-              settings.dispatchEnabled 
+              currentDispatchEnabled 
                 ? 'bg-zinc-900 border-indigo-500/30 hover:border-indigo-500/60 shadow-[0_0_15px_-3px_rgba(99,102,241,0.15)]' 
                 : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
             }`}
           >
-            <div className={`text-lg font-mono font-bold mb-1 ${settings.dispatchEnabled ? 'text-indigo-400' : 'text-zinc-500'}`}>
-              {settings.cronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour}:{String(settings.cronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute).padStart(2, '0')}
+            <div className={`text-lg font-mono font-bold mb-1 ${currentDispatchEnabled ? 'text-indigo-400' : 'text-zinc-500'}`}>
+              {currentCronTimes?.evening?.hour ?? DEFAULT_CRON_TIMES.evening.hour}:{String(currentCronTimes?.evening?.minute ?? DEFAULT_CRON_TIMES.evening.minute).padStart(2, '0')}
             </div>
             <div className="flex items-center justify-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${settings.dispatchEnabled ? 'bg-indigo-500 animate-pulse' : 'bg-zinc-700'}`} />
-              <span className={`text-[10px] font-medium uppercase tracking-wider ${settings.dispatchEnabled ? 'text-indigo-300' : 'text-zinc-600'}`}>Evening</span>
+              <div className={`w-1.5 h-1.5 rounded-full ${currentDispatchEnabled ? 'bg-indigo-500 animate-pulse' : 'bg-zinc-700'}`} />
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${currentDispatchEnabled ? 'text-indigo-300' : 'text-zinc-600'}`}>Evening</span>
             </div>
           </button>
         </div>

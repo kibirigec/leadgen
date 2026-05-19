@@ -1,11 +1,16 @@
 /**
  * LeadGen Worker
- * 
- * Standalone process for:
- * - Scraping leads (5 AM daily)
- * - Dispatching messages (6:30 AM, 12:30 PM, 7:30 PM)
- * - Running WhatsApp bot
- * - Providing status API
+ *
+ * Standalone process managing two independent market pipelines:
+ * - Uganda (UG): EAT timezone schedule
+ * - United States (US): UTC schedule (EST business hours)
+ *
+ * Each market has its own:
+ * - Scrape cron
+ * - Dispatch crons (morning / lunch / evening)
+ * - WhatsApp bot session
+ * - Firestore status doc
+ * - Independent on/off toggle
  */
 
 import express from 'express';
@@ -17,9 +22,10 @@ import fs from 'fs';
 
 // Try multiple paths for .env file
 const envPaths = [
-    path.resolve(process.cwd(), '.env'),  // Current working directory
-    path.resolve(__dirname, '../../../.env'),  // worker/.env from dist/worker/src
-    path.resolve(__dirname, '../../../../.env'),  // project root from dist/worker/src
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(__dirname, '../../.env'),
+    path.resolve(__dirname, '../../../.env'),
+    path.resolve(__dirname, '../../../../.env'),
 ];
 
 for (const envPath of envPaths) {
@@ -34,6 +40,7 @@ import { initializeFirebase, getWorkerStatus, updateWorkerStatus } from './fireb
 import { runScrape } from './scrape-runner';
 import { runDispatch, runBacklogDispatch } from './dispatch-runner';
 import { getDispatchConfig, updateDispatchConfig } from './config-manager';
+import type { Market } from '../../shared/types';
 
 const app = express();
 const PORT = process.env.WORKER_PORT || 4000;
@@ -42,11 +49,19 @@ const PORT = process.env.WORKER_PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// Dispatch lock - prevents concurrent dispatches
-let dispatchInProgress = false;
-let currentDispatchWindow: string | null = null;
+// ============================================
+// DISPATCH LOCKS (per market)
+// ============================================
 
-// In-memory logs (last 100)
+const dispatchState: Record<Market, { inProgress: boolean; currentWindow: string | null }> = {
+    UG: { inProgress: false, currentWindow: null },
+    US: { inProgress: false, currentWindow: null },
+};
+
+// ============================================
+// LOGGING
+// ============================================
+
 const logs: Array<{ timestamp: string; level: string; message: string }> = [];
 const addLog = (level: string, message: string) => {
     const entry = { timestamp: new Date().toISOString(), level, message };
@@ -56,17 +71,48 @@ const addLog = (level: string, message: string) => {
 };
 
 // ============================================
+// HELPERS
+// ============================================
+
+function parseMarket(raw?: string): Market {
+    return raw === 'US' ? 'US' : 'UG';
+}
+
+/** Convert EAT hour to UTC cron — EAT = UTC+3 */
+function eatToUtcCron(hour: number, minute: number): string {
+    let utcHour = hour - 3;
+    if (utcHour < 0) utcHour += 24;
+    return `${minute} ${utcHour} * * *`;
+}
+
+/** UTC cron expression directly (for US market which stores UTC) */
+function utcCron(hour: number, minute: number): string {
+    return `${minute} ${hour} * * *`;
+}
+
+/** Determine current dispatch window from UTC hour */
+function detectWindow(utcHour: number, market: Market): 'morning' | 'lunch' | 'evening' {
+    if (market === 'US') {
+        // US windows in UTC: morning=14, lunch=17, evening=23
+        if (utcHour >= 14 && utcHour < 17) return 'morning';
+        if (utcHour >= 17 && utcHour < 23) return 'lunch';
+        return 'evening';
+    }
+    // UG windows in EAT = UTC+3
+    const eatHour = (utcHour + 3) % 24;
+    if (eatHour >= 5 && eatHour < 12) return 'morning';
+    if (eatHour >= 12 && eatHour < 17) return 'lunch';
+    return 'evening';
+}
+
+// ============================================
 // STATUS API
 // ============================================
 
 app.get('/status', async (req, res) => {
     try {
         const workerData = await getWorkerStatus();
-        res.json({
-            alive: true,
-            uptime: process.uptime(),
-            ...workerData,
-        });
+        res.json({ alive: true, uptime: process.uptime(), ...workerData });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -82,14 +128,15 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// MANUAL TRIGGERS
+// MANUAL TRIGGERS — SCRAPE
 // ============================================
 
 app.post('/trigger/scrape', async (req, res) => {
-    const { location, limit, businessType } = req.body;
+    const { location, limit, businessType, market: rawMarket } = req.body;
+    const market = parseMarket(rawMarket);
 
-    // Build log message with all parameters
     const params = [];
+    if (market !== 'UG') params.push(`Market: ${market}`);
     if (location) params.push(`Target: ${location}`);
     if (businessType) params.push(`Type: ${businessType}`);
     if (limit) params.push(`Limit: ${limit}`);
@@ -101,7 +148,8 @@ app.post('/trigger/scrape', async (req, res) => {
         const result = await runScrape(addLog, {
             targetLocation: location,
             targetBusinessType: businessType,
-            limit: limit ? Number(limit) : undefined
+            limit: limit ? Number(limit) : undefined,
+            market,
         });
         res.json({ success: true, result });
     } catch (error: any) {
@@ -110,122 +158,176 @@ app.post('/trigger/scrape', async (req, res) => {
     }
 });
 
+// ============================================
+// MANUAL TRIGGERS — DISPATCH
+// ============================================
+
 app.post('/trigger/dispatch/:window', async (req, res) => {
     const window = req.params.window as 'morning' | 'lunch' | 'evening';
-    const { filters } = req.body; // Extract filters
+    const { filters, market: rawMarket } = req.body;
+    const market = parseMarket(rawMarket);
 
     if (!['morning', 'lunch', 'evening'].includes(window)) {
         return res.status(400).json({ error: 'Invalid window' });
     }
 
-    // Check dispatch lock
-    if (dispatchInProgress) {
-        addLog('warning', `Dispatch rejected - already running for ${currentDispatchWindow}`);
-        return res.status(409).json({ error: `Dispatch already in progress for ${currentDispatchWindow}` });
+    const state = dispatchState[market];
+    if (state.inProgress) {
+        addLog('warning', `[${market}] Dispatch rejected - already running for ${state.currentWindow}`);
+        return res.status(409).json({ error: `[${market}] Dispatch already in progress for ${state.currentWindow}` });
     }
 
-    // Log filters if present
     const filterLog = filters ? ` (Filters: ${JSON.stringify(filters)})` : '';
-    addLog('info', `Manual dispatch triggered for ${window}${filterLog}`);
+    addLog('info', `[${market}] Manual dispatch triggered for ${window}${filterLog}`);
 
-    dispatchInProgress = true;
-    currentDispatchWindow = window;
+    state.inProgress = true;
+    state.currentWindow = window;
 
     try {
-        const result = await runDispatch(window, addLog, { filters });
+        const result = await runDispatch(window, addLog, { filters, market });
         res.json({ success: true, result });
     } catch (error: any) {
-        addLog('error', `Dispatch failed: ${error.message}`);
+        addLog('error', `[${market}] Dispatch failed: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     } finally {
-        dispatchInProgress = false;
-        currentDispatchWindow = null;
+        state.inProgress = false;
+        state.currentWindow = null;
     }
 });
 
-// Resume dispatch for current time window (auto-detect)
 app.post('/trigger/dispatch-current', async (req, res) => {
-    // Check dispatch lock first
-    if (dispatchInProgress) {
-        addLog('warning', `Dispatch rejected - already running for ${currentDispatchWindow}`);
-        return res.status(409).json({ error: `Dispatch already in progress for ${currentDispatchWindow}` });
+    const { market: rawMarket } = req.body || {};
+    const market = parseMarket(rawMarket);
+    const state = dispatchState[market];
+
+    if (state.inProgress) {
+        return res.status(409).json({ error: `[${market}] Dispatch already in progress for ${state.currentWindow}` });
     }
 
-    // Determine current window based on EAT time (UTC+3)
     const now = new Date();
-    const eatHour = (now.getUTCHours() + 3) % 24;
+    const window = detectWindow(now.getUTCHours(), market);
 
-    let window: 'morning' | 'lunch' | 'evening';
-    if (eatHour >= 5 && eatHour < 12) {
-        window = 'morning';
-    } else if (eatHour >= 12 && eatHour < 17) {
-        window = 'lunch';
-    } else {
-        window = 'evening';
-    }
-
-    addLog('info', `▶️ Resume dispatch for ${window} window (auto-detected, ${eatHour}:00 EAT)`);
-    dispatchInProgress = true;
-    currentDispatchWindow = window;
+    addLog('info', `[${market}] ▶️ Resume dispatch for ${window} window (auto-detected)`);
+    state.inProgress = true;
+    state.currentWindow = window;
 
     try {
-        const result = await runDispatch(window, addLog);
+        const result = await runDispatch(window, addLog, { market });
         res.json({ success: true, window, result });
     } catch (error: any) {
-        addLog('error', `Dispatch failed: ${error.message}`);
+        addLog('error', `[${market}] Dispatch failed: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     } finally {
-        dispatchInProgress = false;
-        currentDispatchWindow = null;
+        state.inProgress = false;
+        state.currentWindow = null;
     }
 });
 
-// Dispatch ONLY backlog leads (skip fresh leads)
 app.post('/trigger/dispatch-backlog', async (req, res) => {
-    // Check dispatch lock first
-    if (dispatchInProgress) {
-        addLog('warning', `Backlog dispatch rejected - already running for ${currentDispatchWindow}`);
-        return res.status(409).json({ error: `Dispatch already in progress for ${currentDispatchWindow}` });
+    const { market: rawMarket } = req.body || {};
+    const market = parseMarket(rawMarket);
+    const state = dispatchState[market];
+
+    if (state.inProgress) {
+        return res.status(409).json({ error: `[${market}] Dispatch already in progress for ${state.currentWindow}` });
     }
 
     const limit = parseInt(req.query.limit as string) || 30;
+    const window = detectWindow(new Date().getUTCHours(), market);
 
-    // Determine current window based on EAT time (UTC+3)
-    const now = new Date();
-    const eatHour = (now.getUTCHours() + 3) % 24;
-    let window: 'morning' | 'lunch' | 'evening';
-    if (eatHour >= 5 && eatHour < 12) {
-        window = 'morning';
-    } else if (eatHour >= 12 && eatHour < 17) {
-        window = 'lunch';
-    } else {
-        window = 'evening';
-    }
-
-    addLog('info', `📦 Backlog-only dispatch triggered (limit: ${limit}, window: ${window})`);
-    dispatchInProgress = true;
-    currentDispatchWindow = 'backlog';
+    addLog('info', `[${market}] 📦 Backlog-only dispatch triggered (limit: ${limit}, window: ${window})`);
+    state.inProgress = true;
+    state.currentWindow = 'backlog';
 
     try {
-        const result = await runBacklogDispatch(window, addLog, limit);
+        const result = await runBacklogDispatch(window, addLog, limit, market);
         res.json({ window, ...result });
     } catch (error: any) {
-        addLog('error', `Backlog dispatch failed: ${error.message}`);
+        addLog('error', `[${market}] Backlog dispatch failed: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     } finally {
-        dispatchInProgress = false;
-        currentDispatchWindow = null;
+        state.inProgress = false;
+        state.currentWindow = null;
     }
 });
 
 // ============================================
-// TEST ENDPOINTS (Small batches for testing)
+// CONFIGURATION
+// ============================================
+
+app.get('/config/dispatch', async (req, res) => {
+    const market = parseMarket(req.query.market as string);
+    try {
+        const config = await getDispatchConfig(market);
+        res.json(config);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/config/dispatch', async (req, res) => {
+    const market = parseMarket(req.query.market as string);
+    try {
+        const updates = req.body;
+        const config = await updateDispatchConfig(market, updates);
+        res.json({ success: true, config });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// BOT SESSION CONTROL
+// ============================================
+
+app.post('/bot/stop', async (req, res) => {
+    const market = parseMarket(req.query.market as string);
+    try {
+        const { getDb } = await import('./firebase');
+        const db = getDb();
+        const docId = market === 'US' ? 'bot_status_US' : 'bot_status';
+        await db.collection('system').doc(docId).set({ status: 'stopped' }, { merge: true });
+        res.json({ success: true, market });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/bot/pause', async (req, res) => {
+    const market = parseMarket(req.query.market as string);
+    try {
+        const { getDb } = await import('./firebase');
+        const db = getDb();
+        const docId = market === 'US' ? 'bot_status_US' : 'bot_status';
+        await db.collection('system').doc(docId).set({ status: 'paused' }, { merge: true });
+        res.json({ success: true, market });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/bot/resume', async (req, res) => {
+    const market = parseMarket(req.query.market as string);
+    try {
+        const { getDb } = await import('./firebase');
+        const db = getDb();
+        const docId = market === 'US' ? 'bot_status_US' : 'bot_status';
+        await db.collection('system').doc(docId).set({ status: 'running' }, { merge: true });
+        res.json({ success: true, market });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// TEST ENDPOINTS
 // ============================================
 
 app.post('/trigger/test-scrape', async (req, res) => {
-    addLog('info', '🧪 TEST scrape triggered (3 leads only)');
+    const market = parseMarket(req.body?.market);
+    addLog('info', `🧪 TEST scrape triggered (3 leads, market: ${market})`);
     try {
-        const result = await runScrape(addLog, { limit: 3 }); // Pass limit
+        const result = await runScrape(addLog, { limit: 3, market });
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Test scrape failed: ${error.message}`);
@@ -234,9 +336,10 @@ app.post('/trigger/test-scrape', async (req, res) => {
 });
 
 app.post('/trigger/test-dispatch', async (req, res) => {
-    addLog('info', '🧪 TEST dispatch triggered (3 messages only)');
+    const market = parseMarket(req.body?.market);
+    addLog('info', `🧪 TEST dispatch triggered (3 messages, market: ${market})`);
     try {
-        const result = await runDispatch('morning', addLog, { limit: 3 }); // Pass limit
+        const result = await runDispatch('morning', addLog, { limit: 3, market });
         res.json({ success: true, result });
     } catch (error: any) {
         addLog('error', `Test dispatch failed: ${error.message}`);
@@ -244,7 +347,6 @@ app.post('/trigger/test-dispatch', async (req, res) => {
     }
 });
 
-// Test Telegram notification
 app.post('/trigger/test-telegram', async (req, res) => {
     try {
         const { sendTestNotification } = await import('./telegram');
@@ -256,168 +358,111 @@ app.post('/trigger/test-telegram', async (req, res) => {
 });
 
 // ============================================
-// CONFIGURATION
+// CRON SCHEDULING
 // ============================================
 
-app.get('/config/dispatch', async (req, res) => {
-    try {
-        const config = await getDispatchConfig();
-        res.json(config);
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/config/dispatch', async (req, res) => {
-    try {
-        const updates = req.body;
-        const config = await updateDispatchConfig(updates);
-        res.json({ success: true, config });
-    } catch (error: any) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// ============================================
-// CRON JOBS (Dynamic from Settings)
-// ============================================
-
-// Convert EAT time to UTC cron expression
-function eatToUtcCron(hour: number, minute: number): string {
-    // EAT = UTC+3, so subtract 3 hours
-    let utcHour = hour - 3;
-    if (utcHour < 0) utcHour += 24;
-    return `${minute} ${utcHour} * * *`;
-}
-
-// Store scheduled tasks for cleanup
 const scheduledTasks: cron.ScheduledTask[] = [];
 
-// Schedule all cron jobs based on settings
 async function scheduleCronJobs() {
     const { getSystemSettings } = await import('./firebase');
     const settings = await getSystemSettings();
-    const { cronTimes } = settings;
 
-    // Clear any existing tasks
+    // Clear existing tasks
     scheduledTasks.forEach(task => task.stop());
     scheduledTasks.length = 0;
 
-    // Scrape cron
-    const scrapeCron = eatToUtcCron(cronTimes.scrape.hour, cronTimes.scrape.minute);
-    scheduledTasks.push(cron.schedule(scrapeCron, async () => {
-        const eatTime = `${cronTimes.scrape.hour}:${String(cronTimes.scrape.minute).padStart(2, '0')}`;
-        addLog('info', `⏰ Scrape cron triggered (${eatTime} EAT)`);
+    // --- UGANDA CRONS (EAT → UTC) ---
+    const ugCrons = settings.cronTimes;
 
+    scheduledTasks.push(cron.schedule(eatToUtcCron(ugCrons.scrape.hour, ugCrons.scrape.minute), async () => {
         const currentSettings = await getSystemSettings();
-        if (!currentSettings.scrapeEnabled) {
-            addLog('warning', '⏸️ Scrape skipped - disabled in settings');
+        if (!currentSettings.ugEnabled || !currentSettings.scrapeEnabled) {
+            addLog('warning', '⏸️ [UG] Scrape skipped - disabled');
             return;
         }
-
-        try {
-            await runScrape(addLog);
-        } catch (error: any) {
-            addLog('error', `Scrape cron failed: ${error.message}`);
-        }
+        addLog('info', `⏰ [UG] Scrape cron triggered`);
+        try { await runScrape(addLog, { market: 'UG' }); }
+        catch (e: any) { addLog('error', `[UG] Scrape cron failed: ${e.message}`); }
     }, { timezone: 'UTC' }));
 
-    // Morning dispatch cron
-    const morningCron = eatToUtcCron(cronTimes.morning.hour, cronTimes.morning.minute);
-    scheduledTasks.push(cron.schedule(morningCron, async () => {
-        const eatTime = `${cronTimes.morning.hour}:${String(cronTimes.morning.minute).padStart(2, '0')}`;
-        addLog('info', `⏰ Morning dispatch cron triggered (${eatTime} EAT)`);
+    const ugWindows: Array<['morning' | 'lunch' | 'evening', { hour: number; minute: number }]> = [
+        ['morning', ugCrons.morning],
+        ['lunch', ugCrons.lunch],
+        ['evening', ugCrons.evening],
+    ];
 
+    for (const [window, time] of ugWindows) {
+        scheduledTasks.push(cron.schedule(eatToUtcCron(time.hour, time.minute), async () => {
+            const currentSettings = await getSystemSettings();
+            if (!currentSettings.ugEnabled || !currentSettings.dispatchEnabled) {
+                addLog('warning', `⏸️ [UG] ${window} dispatch skipped - disabled`);
+                return;
+            }
+            const state = dispatchState['UG'];
+            if (state.inProgress) {
+                addLog('warning', `[UG] ${window} dispatch skipped - already running`);
+                return;
+            }
+            addLog('info', `⏰ [UG] ${window} dispatch cron triggered`);
+            state.inProgress = true;
+            state.currentWindow = window;
+            try { await runDispatch(window, addLog, { market: 'UG' }); }
+            catch (e: any) { addLog('error', `[UG] ${window} dispatch failed: ${e.message}`); }
+            finally { state.inProgress = false; state.currentWindow = null; }
+        }, { timezone: 'UTC' }));
+    }
+
+    // --- US CRONS (UTC directly) ---
+    const usCrons = settings.usCronTimes;
+
+    scheduledTasks.push(cron.schedule(utcCron(usCrons.scrape.hour, usCrons.scrape.minute), async () => {
         const currentSettings = await getSystemSettings();
-        if (!currentSettings.dispatchEnabled) {
-            addLog('warning', '⏸️ Morning dispatch skipped - disabled in settings');
+        if (!currentSettings.usEnabled || !currentSettings.usScrapeEnabled) {
+            addLog('warning', '⏸️ [US] Scrape skipped - disabled');
             return;
         }
-
-        if (dispatchInProgress) {
-            addLog('warning', 'Morning dispatch skipped - another dispatch in progress');
-            return;
-        }
-
-        dispatchInProgress = true;
-        currentDispatchWindow = 'morning';
-        try {
-            await runDispatch('morning', addLog);
-        } catch (error: any) {
-            addLog('error', `Morning dispatch failed: ${error.message}`);
-        } finally {
-            dispatchInProgress = false;
-            currentDispatchWindow = null;
-        }
+        addLog('info', `⏰ [US] Scrape cron triggered`);
+        try { await runScrape(addLog, { market: 'US' }); }
+        catch (e: any) { addLog('error', `[US] Scrape cron failed: ${e.message}`); }
     }, { timezone: 'UTC' }));
 
-    // Lunch dispatch cron
-    const lunchCron = eatToUtcCron(cronTimes.lunch.hour, cronTimes.lunch.minute);
-    scheduledTasks.push(cron.schedule(lunchCron, async () => {
-        const eatTime = `${cronTimes.lunch.hour}:${String(cronTimes.lunch.minute).padStart(2, '0')}`;
-        addLog('info', `⏰ Lunch dispatch cron triggered (${eatTime} EAT)`);
+    const usWindows: Array<['morning' | 'lunch' | 'evening', { hour: number; minute: number }]> = [
+        ['morning', usCrons.morning],
+        ['lunch', usCrons.lunch],
+        ['evening', usCrons.evening],
+    ];
 
-        const currentSettings = await getSystemSettings();
-        if (!currentSettings.dispatchEnabled) {
-            addLog('warning', '⏸️ Lunch dispatch skipped - disabled in settings');
-            return;
-        }
-
-        if (dispatchInProgress) {
-            addLog('warning', 'Lunch dispatch skipped - another dispatch in progress');
-            return;
-        }
-
-        dispatchInProgress = true;
-        currentDispatchWindow = 'lunch';
-        try {
-            await runDispatch('lunch', addLog);
-        } catch (error: any) {
-            addLog('error', `Lunch dispatch failed: ${error.message}`);
-        } finally {
-            dispatchInProgress = false;
-            currentDispatchWindow = null;
-        }
-    }, { timezone: 'UTC' }));
-
-    // Evening dispatch cron
-    const eveningCron = eatToUtcCron(cronTimes.evening.hour, cronTimes.evening.minute);
-    scheduledTasks.push(cron.schedule(eveningCron, async () => {
-        const eatTime = `${cronTimes.evening.hour}:${String(cronTimes.evening.minute).padStart(2, '0')}`;
-        addLog('info', `⏰ Evening dispatch cron triggered (${eatTime} EAT)`);
-
-        const currentSettings = await getSystemSettings();
-        if (!currentSettings.dispatchEnabled) {
-            addLog('warning', '⏸️ Evening dispatch skipped - disabled in settings');
-            return;
-        }
-
-        if (dispatchInProgress) {
-            addLog('warning', 'Evening dispatch skipped - another dispatch in progress');
-            return;
-        }
-
-        dispatchInProgress = true;
-        currentDispatchWindow = 'evening';
-        try {
-            await runDispatch('evening', addLog);
-        } catch (error: any) {
-            addLog('error', `Evening dispatch failed: ${error.message}`);
-        } finally {
-            dispatchInProgress = false;
-            currentDispatchWindow = null;
-        }
-    }, { timezone: 'UTC' }));
+    for (const [window, time] of usWindows) {
+        scheduledTasks.push(cron.schedule(utcCron(time.hour, time.minute), async () => {
+            const currentSettings = await getSystemSettings();
+            if (!currentSettings.usEnabled || !currentSettings.usDispatchEnabled) {
+                addLog('warning', `⏸️ [US] ${window} dispatch skipped - disabled`);
+                return;
+            }
+            const state = dispatchState['US'];
+            if (state.inProgress) {
+                addLog('warning', `[US] ${window} dispatch skipped - already running`);
+                return;
+            }
+            addLog('info', `⏰ [US] ${window} dispatch cron triggered`);
+            state.inProgress = true;
+            state.currentWindow = window;
+            try { await runDispatch(window, addLog, { market: 'US' }); }
+            catch (e: any) { addLog('error', `[US] ${window} dispatch failed: ${e.message}`); }
+            finally { state.inProgress = false; state.currentWindow = null; }
+        }, { timezone: 'UTC' }));
+    }
 
     // Log scheduled times
-    const formatTime = (t: { hour: number; minute: number }) =>
-        `${t.hour}:${String(t.minute).padStart(2, '0')} EAT`;
-
-    addLog('info', 'Cron jobs scheduled:');
-    addLog('info', `  - Scrape: ${formatTime(cronTimes.scrape)}`);
-    addLog('info', `  - Morning: ${formatTime(cronTimes.morning)}`);
-    addLog('info', `  - Lunch: ${formatTime(cronTimes.lunch)}`);
-    addLog('info', `  - Evening: ${formatTime(cronTimes.evening)}`);
+    addLog('info', '📅 Cron jobs scheduled:');
+    addLog('info', `  🇺🇬 UG Scrape: ${ugCrons.scrape.hour}:${String(ugCrons.scrape.minute).padStart(2, '0')} EAT`);
+    addLog('info', `  🇺🇬 UG Morning: ${ugCrons.morning.hour}:${String(ugCrons.morning.minute).padStart(2, '0')} EAT`);
+    addLog('info', `  🇺🇬 UG Lunch: ${ugCrons.lunch.hour}:${String(ugCrons.lunch.minute).padStart(2, '0')} EAT`);
+    addLog('info', `  🇺🇬 UG Evening: ${ugCrons.evening.hour}:${String(ugCrons.evening.minute).padStart(2, '0')} EAT`);
+    addLog('info', `  🇺🇸 US Scrape: ${usCrons.scrape.hour}:${String(usCrons.scrape.minute).padStart(2, '0')} UTC`);
+    addLog('info', `  🇺🇸 US Morning: ${usCrons.morning.hour}:${String(usCrons.morning.minute).padStart(2, '0')} UTC`);
+    addLog('info', `  🇺🇸 US Lunch: ${usCrons.lunch.hour}:${String(usCrons.lunch.minute).padStart(2, '0')} UTC`);
+    addLog('info', `  🇺🇸 US Evening: ${usCrons.evening.hour}:${String(usCrons.evening.minute).padStart(2, '0')} UTC`);
 }
 
 // ============================================
@@ -445,10 +490,9 @@ async function start() {
 
     await updateWorkerStatus({
         status: 'running',
-        startedAt: new Date().toISOString()
+        startedAt: new Date().toISOString(),
     });
 
-    // Schedule cron jobs from settings
     await scheduleCronJobs();
 
     app.listen(PORT, () => {
@@ -460,4 +504,3 @@ start().catch((error) => {
     console.error('Failed to start worker:', error);
     process.exit(1);
 });
-

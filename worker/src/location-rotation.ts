@@ -1,9 +1,12 @@
 /**
  * Location Rotation Map for Uganda
- * 
+ *
  * Suburb-level granularity for Google Maps scraping
  * Reduces duplicates and prevents exhaustion
  */
+
+import type { Market } from '../../shared/types';
+
 
 export const LOCATION_ROTATION: Record<string, string[]> = {
     Kampala: [
@@ -144,4 +147,32 @@ export function getTodaysCity(): string {
  */
 export function getSuburbsForCity(city: string): string[] {
     return LOCATION_ROTATION[city] || [];
+}
+
+/**
+ * Market-aware location accessor.
+ * Returns the correct rotation map and city list for the given market.
+ */
+export function getLocationsForMarket(market: Market): {
+    rotation: Record<string, string[]>;
+    cities: string[];
+    getTodaysCity: () => string;
+    getSuburbs: (city: string) => string[];
+} {
+    if (market === 'US') {
+        // Lazy import to avoid circular deps at module level
+        const us = require('./location-rotation-us');
+        return {
+            rotation: us.US_LOCATION_ROTATION,
+            cities: us.US_CITIES,
+            getTodaysCity: us.getTodaysUSCity,
+            getSuburbs: us.getUSSuburbsForCity,
+        };
+    }
+    return {
+        rotation: LOCATION_ROTATION,
+        cities: CITIES,
+        getTodaysCity,
+        getSuburbs: getSuburbsForCity,
+    };
 }

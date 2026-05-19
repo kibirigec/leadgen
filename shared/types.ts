@@ -4,6 +4,9 @@
  * Type definitions used across worker and frontend.
  */
 
+/** Supported outreach markets */
+export type Market = 'UG' | 'US';
+
 /**
  * Lead from Firestore leads_queue collection
  */
@@ -29,6 +32,8 @@ export interface QueuedLead {
     sentAt?: string;
     failedAt?: string;
     error?: string;
+    /** Which market this lead belongs to */
+    market?: Market;
 }
 
 /**
@@ -41,4 +46,6 @@ export interface OutreachHistoryEntry {
     lastContactedAt: string;
     totalAttempts: number;
     status: 'contacted' | 'replied' | 'blocked' | 'failed';
+    /** Which market this outreach belongs to */
+    market?: Market;
 }

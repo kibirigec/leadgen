@@ -1,11 +1,14 @@
 /**
  * Master Keyword Matrix for Google Maps Scraping
- * 
+ *
  * - 14 business types
  * - Multiple keywords per type
  * - Daily rotation (1 keyword per type per day)
  * - 7-day cooldown per (keyword + suburb + city)
  */
+
+import type { Market } from '../../shared/types';
+
 
 export interface BusinessType {
     type: string;
@@ -137,3 +140,15 @@ export const WINDOW_QUOTAS = {
     lunch: 30,
     evening: 40,
 };
+
+/**
+ * Market-aware keyword matrix accessor.
+ * Returns the correct matrix for the given market.
+ */
+export function getKeywordMatrixForMarket(market: Market): BusinessType[] {
+    if (market === 'US') {
+        const { US_KEYWORD_MATRIX } = require('./keyword-matrix-us');
+        return US_KEYWORD_MATRIX;
+    }
+    return KEYWORD_MATRIX;
+}

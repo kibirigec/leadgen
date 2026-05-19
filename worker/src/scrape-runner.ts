@@ -16,10 +16,11 @@ import { MockApifyClient } from './mock-apify';
 import { pullFromReservePool, addToReservePool, calculatePriority, TimeWindow } from './reserve-pool';
 import { isPhoneUsed } from './deduplication';
 import { notifyScrapeStart, notifyScrapeEnd, notifyError } from './telegram';
-import { getTodaysCity, getSuburbsForCity } from './location-rotation';
+import { getLocationsForMarket } from './location-rotation';
 import { isAvailableForScrape, markAsScraped } from './rotation-tracker';
-import { KEYWORD_MATRIX, getTodaysKeyword, getBusinessTypesForWindow, WINDOW_QUOTAS } from './keyword-matrix';
+import { getKeywordMatrixForMarket, getTodaysKeyword, getBusinessTypesForWindow, WINDOW_QUOTAS } from './keyword-matrix';
 import { getDispatchConfig } from './config-manager';
+import type { Market } from '../../shared/types';
 
 type LogFn = (level: string, message: string) => void;
 
@@ -38,14 +39,14 @@ interface ScrapedLead {
 
 export async function runScrape(
     log: LogFn,
-    options: { limit?: number; targetLocation?: string; targetBusinessType?: string } = {}
+    options: { limit?: number; targetLocation?: string; targetBusinessType?: string; market?: Market } = {}
 ): Promise<{ success: boolean; totalScraped: number }> {
-    const { limit, targetLocation, targetBusinessType } = options;
+    const { limit, targetLocation, targetBusinessType, market = 'UG' } = options;
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
 
     const testSettings = await getTestSettings();
-    const config = await getDispatchConfig();
+    const config = await getDispatchConfig(market);
     let effectiveLimit = limit;
 
     if (testSettings.testMode) {
@@ -53,21 +54,28 @@ export async function runScrape(
         effectiveLimit = 5;
     }
 
+    // Get location helpers for this market
+    const locationHelper = getLocationsForMarket(market);
+    const keywordMatrix = getKeywordMatrixForMarket(market);
+    const marketLabel = market === 'US' ? '🇺🇸 US' : '🇺🇬 UG';
+
     // Determine target location(s)
     let todaysCity: string;
     let suburbs: string[];
 
     if (targetLocation && targetLocation.trim().length > 0) {
         todaysCity = targetLocation;
-        suburbs = [targetLocation]; // Use exact location as the "suburb"
-        log('info', `🚀 Starting scrape for ${today} (TARGET: ${targetLocation})`);
+        suburbs = [targetLocation];
+        log('info', `🚀 Starting ${marketLabel} scrape for ${today} (TARGET: ${targetLocation})`);
     } else {
-        // Default: Rotation Mode
-        todaysCity = getTodaysCity();
-        suburbs = getSuburbsForCity(todaysCity);
-        log('info', `🚀 Starting scrape for ${today}`);
+        todaysCity = locationHelper.getTodaysCity();
+        suburbs = locationHelper.getSuburbs(todaysCity);
+        log('info', `🚀 Starting ${marketLabel} scrape for ${today}`);
         log('info', `📍 City: ${todaysCity} (${suburbs.length} suburbs)`);
     }
+
+    // Search string suffix per market
+    const locationSuffix = market === 'US' ? '' : ''; // Location strings already include country for US
 
     // Send start notification
     await notifyScrapeStart();
@@ -110,7 +118,7 @@ export async function runScrape(
             .map(([type]) => type);
 
         // Filter matrix to get full definitions for these types
-        let businessTypes = KEYWORD_MATRIX.filter(bt => activeTypesForWindow.includes(bt.type));
+        let businessTypes = keywordMatrix.filter(bt => activeTypesForWindow.includes(bt.type));
 
         // Filter by target business type if specified
         if (targetBusinessType && targetBusinessType.trim().length > 0) {
@@ -174,8 +182,9 @@ export async function runScrape(
 
 
                     try {
-                        // Build query: {keyword} in {suburb}
-                        const searchQuery = `${keyword} in ${suburb}`;
+                        // Build query: {keyword} in {suburb}, {city}, {Country}
+                        const countryString = market === 'US' ? 'USA' : 'Uganda';
+                        const searchQuery = `${keyword} in ${suburb}, ${todaysCity}, ${countryString}`;
                         log('info', `        🔍 ${searchQuery}`);
 
                         const run = await apifyClient.actor('compass/crawler-google-places').call({
@@ -253,10 +262,11 @@ export async function runScrape(
 
         // Step 3: Save to leads_queue
         if (leadsForQueue.length > 0) {
-            log('info', `  4️⃣ Saving ${leadsForQueue.length} leads to queue`);
+            const collectionName = market === 'US' ? 'leads_queue_US' : 'leads_queue';
+            log('info', `  4️⃣ Saving ${leadsForQueue.length} leads to queue (${collectionName})`);
 
             for (const lead of leadsForQueue) {
-                await db.collection('leads_queue').add({
+                await db.collection(collectionName).add({
                     name: lead.name,
                     phone: lead.phone,
                     address: lead.address,
@@ -268,6 +278,7 @@ export async function runScrape(
                     priority: lead.priority,
                     status: 'pending',
                     dispatchDate: today,
+                    market,         // <-- tag with market
                     createdAt: new Date().toISOString(),
                 });
                 totalQueued++;

@@ -1,10 +1,10 @@
 import { getSavedLeadsAction } from "@/actions/leads";
-import { HomeClient } from "@/components/HomeClient";
+import { LeadsClient } from "@/components/LeadsClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function SavedLeadsPage() {
   const leads = await getSavedLeadsAction();
 
-  return <HomeClient initialLeads={leads} />;
+  return <LeadsClient initialLeads={leads} />;
 }

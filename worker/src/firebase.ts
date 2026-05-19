@@ -94,11 +94,12 @@ export async function updateWorkerStatus(update: Partial<WorkerStatus>): Promise
     await db.collection('system').doc('worker_status').set(update, { merge: true });
 }
 
-// Get current bot status (for pause/stop checks)
-export async function getBotStatus(): Promise<string> {
-    if (!db) return 'running'; // Mock status for local debugging
+// Get current bot status (for pause/stop checks) — market-aware
+export async function getBotStatus(market: 'UG' | 'US' = 'UG'): Promise<string> {
+    if (!db) return 'running';
     try {
-        const doc = await db.collection('system').doc('bot_status').get();
+        const docId = market === 'US' ? 'bot_status_US' : 'bot_status';
+        const doc = await db.collection('system').doc(docId).get();
         return doc.data()?.status || 'idle';
     } catch {
         return 'running';
@@ -119,21 +120,48 @@ export interface SystemSettings {
     testPhone: string;
     scrapeEnabled: boolean;
     dispatchEnabled: boolean;
-    // Configurable cron times (EAT timezone)
+    // Configurable cron times (EAT timezone) for Uganda
     cronTimes: {
         scrape: CronTime;
         morning: CronTime;
         lunch: CronTime;
         evening: CronTime;
     };
+    // ---- US Market Settings ----
+    /** Master toggle for Uganda market */
+    ugEnabled: boolean;
+    /** Master toggle for US market */
+    usEnabled: boolean;
+    /** US scrape sub-toggle */
+    usScrapeEnabled: boolean;
+    /** US dispatch sub-toggle */
+    usDispatchEnabled: boolean;
+    /** US test mode — redirects US messages to usTestPhone */
+    usTestMode: boolean;
+    usTestPhone: string;
+    /** Configurable cron times (UTC) for US market */
+    usCronTimes: {
+        scrape: CronTime;   // default: 08:00 UTC (3 AM EST)
+        morning: CronTime;  // default: 14:00 UTC (9 AM EST)
+        lunch: CronTime;    // default: 17:30 UTC (12:30 PM EST)
+        evening: CronTime;  // default: 23:00 UTC (6 PM EST)
+    };
 }
 
-// Default cron times (EAT)
+// Default UG cron times (EAT)
 const DEFAULT_CRON_TIMES = {
     scrape: { hour: 5, minute: 0 },
     morning: { hour: 6, minute: 30 },
     lunch: { hour: 12, minute: 30 },
     evening: { hour: 19, minute: 30 },
+};
+
+// Default US cron times (UTC)
+const DEFAULT_US_CRON_TIMES = {
+    scrape: { hour: 8, minute: 0 },    // 3:00 AM EST
+    morning: { hour: 14, minute: 0 },  // 9:00 AM EST
+    lunch: { hour: 17, minute: 30 },   // 12:30 PM EST
+    evening: { hour: 23, minute: 0 },  // 6:00 PM EST
 };
 
 // Cache for settings to avoid repeated reads
@@ -163,6 +191,19 @@ export async function getSystemSettings(): Promise<SystemSettings> {
                 lunch: data?.cronTimes?.lunch ?? DEFAULT_CRON_TIMES.lunch,
                 evening: data?.cronTimes?.evening ?? DEFAULT_CRON_TIMES.evening,
             },
+            // US settings
+            ugEnabled: data?.ugEnabled ?? true,
+            usEnabled: data?.usEnabled ?? false,
+            usScrapeEnabled: data?.usScrapeEnabled ?? true,
+            usDispatchEnabled: data?.usDispatchEnabled ?? true,
+            usTestMode: data?.usTestMode ?? false,
+            usTestPhone: data?.usTestPhone ?? '',
+            usCronTimes: {
+                scrape: data?.usCronTimes?.scrape ?? DEFAULT_US_CRON_TIMES.scrape,
+                morning: data?.usCronTimes?.morning ?? DEFAULT_US_CRON_TIMES.morning,
+                lunch: data?.usCronTimes?.lunch ?? DEFAULT_US_CRON_TIMES.lunch,
+                evening: data?.usCronTimes?.evening ?? DEFAULT_US_CRON_TIMES.evening,
+            },
         };
         settingsCacheTime = now;
         return cachedSettings;
@@ -173,6 +214,13 @@ export async function getSystemSettings(): Promise<SystemSettings> {
             scrapeEnabled: true,
             dispatchEnabled: true,
             cronTimes: DEFAULT_CRON_TIMES,
+            ugEnabled: true,
+            usEnabled: false,
+            usScrapeEnabled: true,
+            usDispatchEnabled: true,
+            usTestMode: false,
+            usTestPhone: '',
+            usCronTimes: DEFAULT_US_CRON_TIMES,
         };
     }
 }

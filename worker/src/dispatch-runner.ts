@@ -10,6 +10,7 @@ import { markPhoneUsed, isPhoneUsed } from './deduplication';
 import { notifyDispatchStart, notifyDispatchEnd, notifyError } from './telegram';
 import { pullFromReservePool } from './reserve-pool';
 import { QueuedLead } from '../../shared/types';
+import type { Market } from '../../shared/types';
 import { getDispatchConfig } from './config-manager';
 
 type LogFn = (level: string, message: string) => void;
@@ -24,16 +25,16 @@ async function getCollectionName(name: string): Promise<string> {
 export async function runDispatch(
     window: TimeWindow,
     log: LogFn,
-    options: { limit?: number; dryRun?: boolean; filters?: { businessType?: string; location?: string } } = {}
+    options: { limit?: number; dryRun?: boolean; filters?: { businessType?: string; location?: string }; market?: Market } = {}
 ): Promise<{ success: boolean; sentCount: number }> {
-    const { limit, dryRun = false, filters } = options;
+    const { limit, dryRun = false, filters, market = 'UG' } = options;
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
-    const config = await getDispatchConfig();
+    const config = await getDispatchConfig(market);
 
     // Check test mode
     const testSettings = await getTestSettings();
-    const collectionName = 'leads_queue';
+    const collectionName = market === 'US' ? 'leads_queue_US' : 'leads_queue';
 
     if (testSettings.testMode) {
         log('info', `🧪 TEST MODE ACTIVE: Using real leads, but redirecting messages to ${testSettings.testPhone}`);
@@ -53,7 +54,8 @@ export async function runDispatch(
     let freshQuery = db.collection(collectionName)
         .where('timeWindow', '==', window)
         .where('dispatchDate', '==', today)
-        .where('status', '==', 'pending');
+        .where('status', '==', 'pending')
+        .where('market', '==', market);
 
     if (filters?.businessType) freshQuery = freshQuery.where('businessType', '==', filters.businessType);
     if (filters?.location) freshQuery = freshQuery.where('city', '==', filters.location);
@@ -202,7 +204,7 @@ export async function runDispatch(
     let skippedCount = 0;
 
     for (const lead of uniqueLeads) {
-        const alreadyContacted = await isPhoneUsed(lead.phone);
+        const alreadyContacted = await isPhoneUsed(lead.phone, market);
         if (alreadyContacted) {
             skippedCount++;
             // Mark as skipped in queue to avoid re-processing
@@ -254,7 +256,7 @@ export async function runDispatch(
 
     // Run the bot
     try {
-        const result = await runWhatsAppBot(leadsToProcess, log);
+        const result = await runWhatsAppBot(leadsToProcess, log, market);
 
         log('info', `Bot finished. Contacted IDs: ${result.contactedLeadIds.join(', ')}`);
 
@@ -277,7 +279,7 @@ export async function runDispatch(
             // Record in outreach_history for deduplication
             if (lead?.phone) {
                 try {
-                    await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted');
+                    await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted', market);
                 } catch (err: any) {
                     log('error', `  ❌ Failed to mark phone ${lead.phone} as used: ${err.message}`);
                 }
@@ -316,7 +318,8 @@ export async function runDispatch(
 export async function runBacklogDispatch(
     window: TimeWindow,
     log: LogFn,
-    limit: number = 30
+    limit: number = 30,
+    market: Market = 'UG'
 ): Promise<{ success: boolean; sentCount: number; backlogCount: number; reserveCount: number }> {
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
@@ -326,9 +329,9 @@ export async function runBacklogDispatch(
 
     // Check test mode
     const testSettings = await getTestSettings();
-    const config = await getDispatchConfig();
+    const config = await getDispatchConfig(market);
     // User Request: Test Result should use REAL data source but intercept output
-    const collectionName = 'leads_queue';
+    const collectionName = market === 'US' ? 'leads_queue_US' : 'leads_queue';
 
     if (testSettings.testMode) {
         log('info', `🧪 TEST MODE ACTIVE (Backlog): Using real leads, but redirecting messages to ${testSettings.testPhone}`);
@@ -464,7 +467,7 @@ export async function runBacklogDispatch(
     for (const lead of uniqueLeads) {
         // Log the check for debugging
         const checkPhone = lead.phone.replace(/\D/g, '');
-        const alreadyContacted = await isPhoneUsed(lead.phone);
+        const alreadyContacted = await isPhoneUsed(lead.phone, market);
 
         if (alreadyContacted) {
             skippedCount++;
@@ -495,7 +498,7 @@ export async function runBacklogDispatch(
     await updateWorkerStatus({ bot: { status: 'running', sentToday: 0 } });
 
     try {
-        const result = await runWhatsAppBot(leadsToProcess, log);
+        const result = await runWhatsAppBot(leadsToProcess, log, market);
 
         for (const leadId of result.contactedLeadIds) {
             const lead = leads.find(l => l.id === leadId);
@@ -511,7 +514,7 @@ export async function runBacklogDispatch(
             });
             if (lead?.phone) {
                 try {
-                    await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted');
+                    await markPhoneUsed(lead.phone, lead.name || 'Unknown', 'contacted', market);
                 } catch (err: any) {
                     log('error', `  ❌ Failed to mark phone ${lead.phone} as used: ${err.message}`);
                 }
