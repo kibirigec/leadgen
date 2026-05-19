@@ -16,6 +16,7 @@ interface BotStatus {
   processedLeads?: number;
   errorCount?: number;
   updatedAt?: string;
+  qrCode?: string;
 }
 
 interface LogEntry {
@@ -830,32 +831,58 @@ export function MonitorClient() {
         </div>
       )}
 
-      {/* US WhatsApp Login Trigger */}
-      {market === 'US' && (
-        <div className="mb-4 bg-zinc-800/80 border border-zinc-700 rounded-xl p-3 flex justify-between items-center text-zinc-400 text-sm">
+      {/* WhatsApp Session Card */}
+      <div className="mb-4 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <div className="flex justify-between items-center text-zinc-400 text-sm mb-3">
           <div className="flex items-center gap-2">
-            <Rocket className="w-4 h-4 text-zinc-400" />
-            <span>US WhatsApp Session</span>
+            <Rocket className="w-4 h-4 text-emerald-400" />
+            <span className="font-semibold text-zinc-200">
+              {market === 'US' ? '🇺🇸 US' : '🇺🇬 Uganda'} WhatsApp Session
+            </span>
           </div>
           <button 
+            disabled={status.status === 'running' || status.status === 'starting' || status.status === 'waiting_for_scan'}
             onClick={async () => {
-              setLoading('login-us');
+              setLoading('login');
               try {
                 const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:4000';
-                await fetch(`${workerUrl}/trigger/dispatch-current`, {
+                await fetch(`${workerUrl}/trigger/whatsapp-login`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ market: 'US' })
+                  body: JSON.stringify({ market })
                 });
-              } catch (err) {}
+              } catch (err) {
+                console.error("Failed to start login:", err);
+              }
               setLoading(null);
             }} 
-            className="text-blue-400 bg-blue-500/10 px-3 py-1 rounded-lg"
+            className="text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all animate-pulse"
           >
-            {loading === 'login-us' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Login Headless'}
+            {loading === 'login' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : status.status === 'waiting_for_scan' ? (
+              'Scan Required'
+            ) : status.status === 'running' ? (
+              'Connected'
+            ) : (
+              'Start WhatsApp Login'
+            )}
           </button>
         </div>
-      )}
+
+        {/* Real-time QR Code display */}
+        {status.status === 'waiting_for_scan' && status.qrCode && (
+          <div className="mt-4 p-4 bg-zinc-950 rounded-xl border border-zinc-800 flex flex-col items-center gap-3 animate-in fade-in duration-300">
+            <h3 className="text-sm font-bold text-zinc-300">Scan to Link {market === 'US' ? 'US' : 'Uganda'} Bot</h3>
+            <div className="bg-white p-3 rounded-xl border-4 border-emerald-500 shadow-2xl">
+              <img src={status.qrCode} alt="WhatsApp QR Code" className="w-48 h-48" />
+            </div>
+            <p className="text-xs text-zinc-500 text-center max-w-[200px]">
+              Open WhatsApp on your phone &gt; Settings &gt; Linked Devices &gt; Link a Device
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Test Mode Banner */}
       {(market === 'US' ? settings.usTestMode : settings.testMode) && (
