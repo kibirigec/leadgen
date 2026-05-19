@@ -9,6 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "apify-client": "^2.21.0",
     "clsx": "^2.1.1",
     "extract-zip": "^2.0.1",
@@ -16,23 +20,16 @@
     "firebase-admin": "^13.6.0",
     "lucide-react": "^0.561.0",
     "next": "16.0.10",
-    "puppeteer": "^24.33.0",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "server-only": "^0.0.1",
-    "tailwind-merge": "^3.4.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.0.10",
+    "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "devDependencies": {
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.10"
   }
 }
