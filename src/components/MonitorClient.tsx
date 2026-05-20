@@ -969,7 +969,10 @@ export function MonitorClient() {
         </div>
 
         {/* Location & Business Type Inputs */}
-        <div className="flex flex-col gap-3 mb-4 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
+        <form 
+          onSubmit={(e) => { e.preventDefault(); handleTriggerScrape(); }}
+          className="flex flex-col gap-3 mb-4 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800/50"
+        >
           {market === 'US' ? (
             <USLocationPicker 
               value={targetLocation}
@@ -991,18 +994,16 @@ export function MonitorClient() {
             onChange={e => setTargetBusinessType(e.target.value)}
             className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-zinc-500"
           />
-        </div>
+          <button type="submit" className="hidden" />
+        </form>
+
         <div className="grid grid-cols-4 gap-3">
           <button
             onClick={handleTriggerScrape}
-            disabled={loading !== null || !settings.scrapeEnabled}
-            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
-              settings.scrapeEnabled 
-                ? 'bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/30 text-purple-400' 
-                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
-            }`}
+            disabled={loading !== null}
+            className="group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/30 text-purple-400"
           >
-            <div className={`p-2 rounded-full ${settings.scrapeEnabled ? 'bg-purple-500/20 group-hover:bg-purple-500/30' : 'bg-zinc-800'} transition-colors`}>
+            <div className="p-2 rounded-full bg-purple-500/20 group-hover:bg-purple-500/30 transition-colors">
               {loading === 'scrape' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             </div>
             <span className="text-[10px] font-medium tracking-wide">SCRAPE</span>
@@ -1010,14 +1011,10 @@ export function MonitorClient() {
 
           <button
             onClick={() => triggerDispatch('morning')}
-            disabled={loading !== null || !settings.dispatchEnabled}
-            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
-              settings.dispatchEnabled 
-                ? 'bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 text-blue-400' 
-                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
-            }`}
+            disabled={loading !== null}
+            className="group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 text-blue-400"
           >
-            <div className={`p-2 rounded-full ${settings.dispatchEnabled ? 'bg-blue-500/20 group-hover:bg-blue-500/30' : 'bg-zinc-800'} transition-colors`}>
+            <div className="p-2 rounded-full bg-blue-500/20 group-hover:bg-blue-500/30 transition-colors">
               {loading === 'dispatch-morning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sunrise className="w-4 h-4" />}
             </div>
             <span className="text-[10px] font-medium tracking-wide">MORNING</span>
@@ -1025,14 +1022,10 @@ export function MonitorClient() {
 
           <button
             onClick={() => triggerDispatch('lunch')}
-            disabled={loading !== null || !settings.dispatchEnabled}
-            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
-              settings.dispatchEnabled 
-                ? 'bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/30 text-amber-400' 
-                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
-            }`}
+            disabled={loading !== null}
+            className="group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/30 text-amber-400"
           >
-            <div className={`p-2 rounded-full ${settings.dispatchEnabled ? 'bg-amber-500/20 group-hover:bg-amber-500/30' : 'bg-zinc-800'} transition-colors`}>
+            <div className="p-2 rounded-full bg-amber-500/20 group-hover:bg-amber-500/30 transition-colors">
               {loading === 'dispatch-lunch' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sun className="w-4 h-4" />}
             </div>
             <span className="text-[10px] font-medium tracking-wide">LUNCH</span>
@@ -1040,14 +1033,10 @@ export function MonitorClient() {
 
           <button
             onClick={() => triggerDispatch('evening')}
-            disabled={loading !== null || !settings.dispatchEnabled}
-            className={`group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 ${
-              settings.dispatchEnabled 
-                ? 'bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20 hover:border-indigo-500/30 text-indigo-400' 
-                : 'bg-zinc-800/30 border-zinc-800 text-zinc-600'
-            }`}
+            disabled={loading !== null}
+            className="group relative flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-50 bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20 hover:border-indigo-500/30 text-indigo-400"
           >
-            <div className={`p-2 rounded-full ${settings.dispatchEnabled ? 'bg-indigo-500/20 group-hover:bg-indigo-500/30' : 'bg-zinc-800'} transition-colors`}>
+            <div className="p-2 rounded-full bg-indigo-500/20 group-hover:bg-indigo-500/30 transition-colors">
               {loading === 'dispatch-evening' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Moon className="w-4 h-4" />}
             </div>
             <span className="text-[10px] font-medium tracking-wide">EVENING</span>
