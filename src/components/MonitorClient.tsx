@@ -841,7 +841,7 @@ export function MonitorClient() {
             </span>
           </div>
           <button 
-            disabled={status.status === 'running' || status.status === 'starting' || status.status === 'waiting_for_scan'}
+            disabled={status.status === 'running' || status.status === 'starting' || loading === 'login'}
             onClick={async () => {
               setLoading('login');
               try {
