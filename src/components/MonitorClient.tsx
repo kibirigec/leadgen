@@ -1618,7 +1618,7 @@ export function MonitorClient() {
 
       {/* Control Buttons */}
       {/* Control Buttons - Hidden as requested */}
-      {/* <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-3 mb-6">
         <button
           onClick={handleStart}
           disabled={loading !== null || status.status === 'running' || status.status === 'paused' || !settings.dispatchEnabled}
@@ -1681,7 +1681,7 @@ export function MonitorClient() {
           <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
           <span className="text-[10px] font-bold uppercase tracking-wide">Refresh</span>
         </button>
-      </div> */}
+      </div>
 
       {/* Dispatch Configuration */}
       <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 backdrop-blur-sm">
