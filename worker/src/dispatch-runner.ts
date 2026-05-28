@@ -350,7 +350,7 @@ export async function runBacklogDispatch(
     // 1. Backlog leads (oldest first, time-window agnostic)
     log('info', `Step 1: Fetching backlog leads (oldest first)...`);
     const backlogSnap = await db.collection(collectionName)
-        .where('status', '==', 'pending')
+                .where('status', 'in', ['pending', 'backlog'])
         .where('dispatchDate', '<', today)
         .orderBy('dispatchDate', 'asc')
         .limit(limit)
