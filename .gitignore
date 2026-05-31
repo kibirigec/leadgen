@@ -48,3 +48,6 @@ next-env.d.ts
 # WhatsApp Session
 .wweb_session
 
+combinations.txt
+notes.txt
+

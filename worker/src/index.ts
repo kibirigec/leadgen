@@ -40,6 +40,7 @@ import { initializeFirebase, getWorkerStatus, updateWorkerStatus } from './fireb
 import { runScrape } from './scrape-runner';
 import { runDispatch, runBacklogDispatch } from './dispatch-runner';
 import { getDispatchConfig, updateDispatchConfig } from './config-manager';
+import { runWhatsAppBot } from './bot';
 import type { Market } from '../../shared/types';
 
 const app = express();
@@ -216,6 +217,31 @@ app.post('/trigger/dispatch-current', async (req, res) => {
         res.json({ success: true, window, result });
     } catch (error: any) {
         addLog('error', `[${market}] Dispatch failed: ${error.message}`);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        state.inProgress = false;
+        state.currentWindow = null;
+    }
+});
+
+app.post('/trigger/whatsapp-login', async (req, res) => {
+    const { market: rawMarket } = req.body || {};
+    const market = parseMarket(rawMarket);
+    const state = dispatchState[market];
+
+    if (state.inProgress) {
+        return res.status(409).json({ error: `[${market}] Bot is already running or in progress` });
+    }
+
+    addLog('info', `[${market}] 📱 Manual WhatsApp login triggered`);
+    state.inProgress = true;
+    state.currentWindow = 'login';
+
+    try {
+        const result = await runWhatsAppBot([], addLog, market);
+        res.json({ success: true, result });
+    } catch (error: any) {
+        addLog('error', `[${market}] WhatsApp login failed: ${error.message}`);
         res.status(500).json({ success: false, error: error.message });
     } finally {
         state.inProgress = false;

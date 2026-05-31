@@ -112,4 +112,74 @@ export const US_KEYWORD_MATRIX: BusinessType[] = [
         timeWindow: 'evening',
         dailyQuota: 8,
     },
+    // 18. ROOFER
+    {
+        type: 'roofer',
+        keywords: ['roofing contractor', 'roofer', 'roof repair', 'roofing service'],
+        timeWindow: 'morning',
+        dailyQuota: 5,
+    },
+    // 19. PLUMBER
+    {
+        type: 'plumber',
+        keywords: ['plumber', 'plumbing service', 'clogged drain', 'emergency plumber'],
+        timeWindow: 'morning',
+        dailyQuota: 5,
+    },
+    // 20. ELECTRICIAN
+    {
+        type: 'electrician',
+        keywords: ['electrician', 'electrical contractor', 'electrical repair', 'local electrician'],
+        timeWindow: 'morning',
+        dailyQuota: 5,
+    },
+    // 21. HVAC CONTRACTOR
+    {
+        type: 'hvac',
+        keywords: ['hvac contractor', 'ac repair', 'heating repair', 'air conditioning service'],
+        timeWindow: 'morning',
+        dailyQuota: 5,
+    },
+    // 22. LANDSCAPER
+    {
+        type: 'landscaper',
+        keywords: ['landscaping contractor', 'landscaper', 'lawn care service', 'lawn maintenance'],
+        timeWindow: 'lunch',
+        dailyQuota: 5,
+    },
+    // 23. HOUSE PAINTER
+    {
+        type: 'painter',
+        keywords: ['painting contractor', 'house painter', 'interior painting', 'exterior painting'],
+        timeWindow: 'lunch',
+        dailyQuota: 5,
+    },
+    // 24. AUTO DETAILER
+    {
+        type: 'detailing',
+        keywords: ['auto detailing', 'car wash', 'car detailing', 'mobile detailing'],
+        timeWindow: 'lunch',
+        dailyQuota: 5,
+    },
+    // 25. MOVER
+    {
+        type: 'movers',
+        keywords: ['moving company', 'movers', 'local movers', 'relocation services'],
+        timeWindow: 'lunch',
+        dailyQuota: 5,
+    },
+    // 26. GENERAL CONTRACTOR
+    {
+        type: 'general_contractor',
+        keywords: ['general contractor', 'home remodeling', 'kitchen remodeler', 'bathroom remodeler'],
+        timeWindow: 'evening',
+        dailyQuota: 5,
+    },
+    // 27. TREE SERVICE
+    {
+        type: 'tree_service',
+        keywords: ['tree service', 'tree removal', 'tree trimming', 'arborist'],
+        timeWindow: 'evening',
+        dailyQuota: 5,
+    },
 ];

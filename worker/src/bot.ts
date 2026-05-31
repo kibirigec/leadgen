@@ -29,6 +29,7 @@ async function updateBotStatus(data: {
     totalLeads?: number;
     processedLeads?: number;
     errorCount?: number;
+    qrCode?: string | null;
 }, market: Market = 'UG') {
     try {
         const db = getDb();
@@ -128,8 +129,44 @@ export async function runWhatsAppBot(
             timeout: 300000,
         });
 
-        await page.waitForSelector(loginSelector, { timeout: 60000 });
+        // Wait for login or QR canvas
+        log('info', 'Waiting for login or QR code...');
+        let loggedIn = false;
+        const maxWaitTime = 180000; // 3 minutes
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWaitTime) {
+            // Check if logged in
+            const isChatListVisible = await page.evaluate((sel: string) => {
+                const el = document.querySelector(sel);
+                return el ? el.getBoundingClientRect().width > 0 : false;
+            }, loginSelector);
+
+            if (isChatListVisible) {
+                loggedIn = true;
+                break;
+            }
+
+            // Check if QR canvas is present
+            const qrCanvas = await page.$('canvas');
+            if (qrCanvas) {
+                log('info', '📱 WhatsApp QR Code detected, capturing screenshot...');
+                const qrBase64 = await qrCanvas.screenshot({ encoding: 'base64' });
+                await updateBotStatus({
+                    status: 'waiting_for_scan',
+                    qrCode: `data:image/png;base64,${qrBase64}`
+                }, market);
+            }
+
+            await new Promise(r => setTimeout(r, 3000));
+        }
+
+        if (!loggedIn) {
+            throw new Error('Timeout waiting for WhatsApp login/scan');
+        }
+
         log('info', 'Logged in successfully');
+        await updateBotStatus({ status: 'running', qrCode: null }, market);
 
         // WARMUP
         log('info', '⏳ Waiting 60s for WhatsApp sync with new browser session...');
@@ -280,7 +317,20 @@ export async function runWhatsAppBot(
                 if (!found) {
                     // Check content for errors or splash
                     const pageContent = await page.content();
+                    const contentLower = pageContent.toLowerCase();
 
+                    // 1. Check for invalid phone number popup FIRST (case-insensitive & robust)
+                    if (
+                        contentLower.includes("isn't on whatsapp") || 
+                        contentLower.includes("is invalid") || 
+                        contentLower.includes("phone number shared") || 
+                        contentLower.includes("url is invalid")
+                    ) {
+                        log('warning', `  ⚠️ Not on WhatsApp: ${lead.name}`);
+                        continue;
+                    }
+
+                    // 2. Check for splash screen
                     if (pageContent.includes('splashscreen')) {
                         splashLoopCount++;
                         if (splashLoopCount > 2) {
@@ -309,10 +359,7 @@ export async function runWhatsAppBot(
                             throw new Error('CRITICAL: Stuck on splash screen (Recovery failed)');
                         }
                     }
-                    if (pageContent.includes('phone number isn\'t on WhatsApp')) {
-                        log('warning', `  ⚠️ Not on WhatsApp: ${lead.name}`);
-                        continue;
-                    }
+
                     log('warning', `  Could not find input box`);
                     errorCount++;
                     continue;

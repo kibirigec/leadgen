@@ -118,18 +118,13 @@ export async function runScrape(
             .map(([type]) => type);
 
         // Filter matrix to get full definitions for these types
-        let businessTypes = keywordMatrix.filter(bt => activeTypesForWindow.includes(bt.type));
+        let businessTypes = targetBusinessType && targetBusinessType.trim().length > 0
+            ? keywordMatrix.filter(b => b.type.toLowerCase() === targetBusinessType.toLowerCase())
+            : keywordMatrix.filter(bt => activeTypesForWindow.includes(bt.type));
 
         // Filter by target business type if specified
         if (targetBusinessType && targetBusinessType.trim().length > 0) {
-            const originalCount = businessTypes.length;
-            businessTypes = businessTypes.filter(b => b.type === targetBusinessType);
-            if (businessTypes.length > 0) {
-                log('info', `\n🎯 Targeting filter: "${targetBusinessType}" (Window: ${window})`);
-            } else if (originalCount > 0) {
-                log('info', `\nℹ️ Skipping ${window} window (Target "${targetBusinessType}" not scheduled for this time)`);
-                continue;
-            }
+            log('info', `\n🎯 Targeting filter: "${targetBusinessType}" (Window: ${window})`);
         }
 
         if (businessTypes.length === 0) continue;
@@ -172,12 +167,13 @@ export async function runScrape(
                 for (const suburb of suburbs) {
                     // Check cooldown for this specific keyword+suburb (SKIP check in test mode? No, better to simulate real conditions, but don't WRITE)
                     const available = await isAvailableForScrape(keyword, suburb);
-                    if (!available && !testSettings.testMode) {
+                    const isManual = !!targetLocation;
+                    if (!available && !testSettings.testMode && !isManual) {
                         log('info', `        ⏸️ ${suburb} (cooldown)`);
                         continue;
                     }
-                    if (!available && testSettings.testMode) {
-                        log('info', `        🧪 Test Mode: Ignoring cooldown for ${suburb}`);
+                    if (!available && (testSettings.testMode || isManual)) {
+                        log('info', `        🎯 ${isManual ? 'Manual Scrape' : 'Test Mode'}: Ignoring cooldown for ${suburb}`);
                     }
 
 
@@ -205,11 +201,25 @@ export async function runScrape(
 
                         let suburbUsable = 0;
                         for (const item of items) {
-                            if (!item.phone) continue;
+                            if (!item.phone) {
+                                log('info', `        🚫 Skipping "${item.title || 'Unknown'}": No phone number`);
+                                continue;
+                            }
 
                             // Check deduplication
                             const isUsed = await isPhoneUsed(item.phone as string);
-                            if (isUsed) continue;
+                            if (isUsed) {
+                                log('info', `        🚫 Skipping "${item.title || 'Unknown'}": Phone ${item.phone} already processed`);
+                                continue;
+                            }
+
+                            // Filter: Only target businesses WITHOUT websites
+                            if (item.website) {
+                                log('info', `        🚫 Skipping "${item.title || 'Unknown'}": Already has a website (${item.website})`);
+                                continue;
+                            }
+
+                            log('info', `        ✨ Found usable lead: "${item.title || 'Unknown'}" (${item.phone})`);
 
                             const lead: ScrapedLead = {
                                 name: (item.title as string) || 'Unknown',

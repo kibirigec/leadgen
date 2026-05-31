@@ -219,6 +219,86 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
             `Hi 👋 — my name is Calvin from Weblery. I came across {name} on Google.\n\nI help independent coffee shops build simple websites that show your menu, hours, and location — making it easier for customers to find and follow you.\n\nWould that be useful for {name}?`,
         ],
     },
+    // 18. ROOFER
+    {
+        businessType: 'roofer',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I came across {name} on Google.\n\nI help roofing contractors build clean, professional gallery websites that showcase your local installs and help you win more high-ticket roofing jobs.\n\nWould that be valuable for {name}?`,
+        ],
+    },
+    // 19. PLUMBER
+    {
+        businessType: 'plumber',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I came across {name} on Google.\n\nI help plumbing services build professional websites that showcase your licensing and make it simple for local homeowners to request emergency service online.\n\nWould that be useful for {name}?`,
+        ],
+    },
+    // 20. ELECTRICIAN
+    {
+        businessType: 'electrician',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I found {name} on Google.\n\nI help electricians and electrical contractors build clean websites that present your services and safety certifications, making it easy for new clients to trust and book you.\n\nWould that be a good fit for {name}?`,
+        ],
+    },
+    // 21. HVAC CONTRACTOR
+    {
+        businessType: 'hvac',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I found {name} on Google.\n\nI help local HVAC contractors build professional websites that outline your services and make scheduling diagnostic visits easy for homeowners.\n\nWould that be helpful for {name}?`,
+        ],
+    },
+    // 22. LANDSCAPER
+    {
+        businessType: 'landscaper',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I came across {name} on Google.\n\nI help landscapers and lawn care businesses build websites that showcase your outdoor project galleries and make it simple to request lawn care quotes.\n\nWould that be valuable for {name}?`,
+        ],
+    },
+    // 23. HOUSE PAINTER
+    {
+        businessType: 'painter',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I found {name} on Google.\n\nI help painting contractors build professional websites that display your before-and-after projects and color consulting, making it easy to schedule estimates.\n\nWould that be a good fit for {name}?`,
+        ],
+    },
+    // 24. AUTO DETAILER
+    {
+        businessType: 'detailing',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I found {name} on Google.\n\nI help auto detailers build clean websites with service package grids, making it simple for car owners to view detailing options and request a booking.\n\nWould that be useful for {name}?`,
+        ],
+    },
+    // 25. MOVER
+    {
+        businessType: 'movers',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I came across {name} on Google.\n\nI help local moving companies build websites with simple quote request forms, making it easy for relocating families to book your services.\n\nWould that be a good fit for {name}?`,
+        ],
+    },
+    // 26. GENERAL CONTRACTOR
+    {
+        businessType: 'general_contractor',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I found {name} on Google.\n\nI help general contractors build high-end websites that showcase your custom builds and renovations, building the trust needed to land premium contracts.\n\nWould that be helpful for {name}?`,
+        ],
+    },
+    // 27. TREE SERVICE
+    {
+        businessType: 'tree_service',
+        variants: [],
+        usVariants: [
+            `Hi 👋 — my name is Calvin from Weblery. I came across {name} on Google.\n\nI help tree service companies build websites that highlight your safety standards, machinery, and licensing, making tree removal quotes straightforward.\n\nWould that be valuable for {name}?`,
+        ],
+    },
 ];
 
 /**
