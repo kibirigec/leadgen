@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }
+    .header { background-color: #007bff; color: white; padding: 20px; text-align: center; border-radius: 4px; }
+    .content { background-color: white; padding: 20px; margin: 20px 0; border-radius: 4px; }
+    .footer { text-align: center; font-size: 12px; color: #666; padding: 20px 0; }
+    a { color: #007bff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Welcome to {{brandName}}</h1>
+    </div>
+    
+    <div class="content">
+      <p>Hello {{name}},</p>
+      
+      <p>Thank you for joining {{brandName}}! We're excited to have you as part of our community.</p>
+      
+      <p>Your account has been created and you can start exploring right away. Here's what you need to know:</p>
+      
+      <ul>
+        <li>Your email: <strong>{{email}}</strong></li>
+        <li>Account created: <strong>{{createdDate}}</strong></li>
+        <li>Your referral code: <strong>{{referralCode}}</strong></li>
+      </ul>
+      
+      <p><a href="{{dashboardUrl}}">Log in to your dashboard</a> to get started.</p>
+      
+      <p>If you have any questions, feel free to reach out to our support team at {{supportEmail}}.</p>
+      
+      <p>Best regards,<br>The {{brandName}} Team</p>
+    </div>
+    
+    <div class="footer">
+      <p>&copy; {{currentYear}} {{brandName}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

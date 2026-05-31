@@ -1,0 +1,21 @@
+Welcome to {{brandName}}
+
+Hello {{name}},
+
+Thank you for joining {{brandName}}! We're excited to have you as part of our community.
+
+Your account has been created and you can start exploring right away. Here's what you need to know:
+
+- Your email: {{email}}
+- Account created: {{createdDate}}
+- Your referral code: {{referralCode}}
+
+Log in to your dashboard to get started: {{dashboardUrl}}
+
+If you have any questions, feel free to reach out to our support team at {{supportEmail}}.
+
+Best regards,
+The {{brandName}} Team
+
+---
+© {{currentYear}} {{brandName}}. All rights reserved.
