@@ -1,4 +1,5 @@
 import { EmailAddress, EmailTemplateName, SendResult } from './types';
+import { SendGridProvider } from './providers/sendgrid';
 
 export interface EmailService {
   send(
@@ -19,38 +20,11 @@ class MockEmailService implements EmailService {
   }
 }
 
-class SendGridEmailService implements EmailService {
-  async send(
-    to: EmailAddress,
-    template: EmailTemplateName,
-    data: Record<string, unknown>
-  ): Promise<SendResult> {
-    // Placeholder: integrate with SendGrid SDK in real implementation.
-    console.log('[SendGridEmailService] sending', { to, template, data });
-    return { success: true, messageId: 'sendgrid-fake-id' };
-  }
-}
-
 export const EmailServiceFactory = (): EmailService => {
   const provider = (process.env.EMAIL_PROVIDER || 'mock').toLowerCase();
-  const enable = process.env.ENABLE_EMAIL_US === 'true';
-
-  if (!enable) {
-    // Dry-run: do not send, just log
-    return {
-      async send(
-        to: EmailAddress,
-        template: EmailTemplateName,
-        data: Record<string, unknown>
-      ): Promise<SendResult> {
-        console.log(`[DRY-RUN] Skipping email send. provider=${provider} to=${to} template=${template}`, data);
-        return { success: true, messageId: 'dry-run' };
-      }
-    };
-  }
 
   if (provider === 'sendgrid') {
-    return new SendGridEmailService();
+    return new SendGridProvider();
   }
 
   return new MockEmailService();
