@@ -98,6 +98,8 @@ export function MonitorClient() {
     evening: { pending: 0, sent: 0 },
   });
   const [error, setError] = useState<string | null>(null);
+  // Holds leads for CSV export when viewing backlog
+  const [exportableLeads, setExportableLeads] = useState<any[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [reservePool, setReservePool] = useState({ morning: 0, lunch: 0, evening: 0, total: 0 });
@@ -233,12 +235,37 @@ export function MonitorClient() {
       }
       
       setDetailedLeads(leads);
+      // Store leads for export
+      setExportableLeads(leads);
     } catch (err) {
       console.error("Error fetching details:", err);
     } finally {
       setModalLoading(false);
     }
   };
+
+  // Export currently loaded backlog leads to CSV
+  const exportBacklogCSV = () => {
+    if (!exportableLeads.length) return;
+    const header = ['"Business Name"', '"Business Type"', '"Location"', '"Phone Number"'];
+    const rows = exportableLeads.map(l => {
+      const location = l.city ? l.city : '';
+      const name = (l.name || '').replace(/"/g, '""');
+      const type = (l.businessType || '').replace(/"/g, '""');
+      const phone = (l.phone || '').replace(/"/g, '""');
+      const loc = location.replace(/"/g, '""');
+      return `"${name}","${type}","${loc}","${phone}"`;
+    });
+    const csvContent = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backlog_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
 
   // Fetch lead stats from leads_queue collection
   const fetchLeadStats = async () => {
