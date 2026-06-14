@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { clientDb } from "@/lib/firebase-client";
 import { doc, onSnapshot, collection, query, orderBy, limit, where, getDocs, getCountFromServer } from "firebase/firestore";
 import { pauseBotAction, resumeBotAction, stopBotAction, clearBotLogs, getSettings, setTestMode, setScrapeEnabled, setDispatchEnabled, setCronTime } from "@/actions/bot";
+import { injectLeadsToUSQueue } from "@/actions/leads";
 import { Pause, Play, Square, RefreshCw, Wifi, WifiOff, Trash2, Rocket, Users, CheckCircle, AlertCircle, XCircle, Bell, BellOff, Zap, X, Loader2, Package, Calendar, History, FlaskConical, Settings, Sunrise, Sun, Moon, RotateCcw, CalendarClock, Clock, ChevronUp, ChevronDown, Target, HelpCircle } from "lucide-react";
 import { requestNotificationPermission, areNotificationsEnabled, onForegroundMessage, initMessaging } from "@/lib/notifications";
 import { getNextScrapeDetails } from "@/lib/client-rotation";
@@ -146,6 +147,17 @@ export function MonitorClient() {
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
 
+  // Inject Leads Modal State (US only)
+  const [showInjectModal, setShowInjectModal] = useState(false);
+  const [injectMode, setInjectMode] = useState<'single' | 'json'>('single');
+  const [injectWindow, setInjectWindow] = useState<'morning' | 'lunch' | 'evening'>('morning');
+  const [injectName, setInjectName] = useState('');
+  const [injectPhone, setInjectPhone] = useState('');
+  const [injectType, setInjectType] = useState('');
+  const [injectJson, setInjectJson] = useState('');
+  const [injectLoading, setInjectLoading] = useState(false);
+  const [injectResult, setInjectResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Helper: action with timeout
   const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => {
     return Promise.race([
@@ -212,15 +224,25 @@ export function MonitorClient() {
         
         // We'll filter client-side below
       } else {
-        // Show pending for current window (TODAY ONLY)
-        const targetWindow = windowFilter || currentWindow;
-        q = query(
-          collection(clientDb, collectionName),
-          where("dispatchDate", "==", today),
-          where("timeWindow", "==", targetWindow),
-          where("status", "==", "pending"),
-          limit(50)
-        );
+        // Show pending for TODAY
+        if (windowFilter) {
+          // If a specific window was clicked in the breakdown
+          q = query(
+            collection(clientDb, collectionName),
+            where("dispatchDate", "==", today),
+            where("timeWindow", "==", windowFilter),
+            where("status", "==", "pending"),
+            limit(50)
+          );
+        } else {
+          // If the overall Pending Today box was clicked
+          q = query(
+            collection(clientDb, collectionName),
+            where("dispatchDate", "==", today),
+            where("status", "==", "pending"),
+            limit(50)
+          );
+        }
       }
       
       const snap = await getDocs(q);
@@ -244,26 +266,104 @@ export function MonitorClient() {
     }
   };
 
-  // Export currently loaded backlog leads to CSV
-  const exportBacklogCSV = () => {
-    if (!exportableLeads.length) return;
-    const header = ['"Business Name"', '"Business Type"', '"Location"', '"Phone Number"'];
-    const rows = exportableLeads.map(l => {
-      const location = l.city ? l.city : '';
-      const name = (l.name || '').replace(/"/g, '""');
-      const type = (l.businessType || '').replace(/"/g, '""');
-      const phone = (l.phone || '').replace(/"/g, '""');
-      const loc = location.replace(/"/g, '""');
-      return `"${name}","${type}","${loc}","${phone}"`;
-    });
-    const csvContent = [header.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `backlog_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Export ALL backlog leads to CSV (fetches all pages from Firestore)
+  const exportBacklogCSV = async () => {
+    try {
+      const collectionName = market === 'US' ? 'leads_queue_US' : 'leads_queue';
+      const queueRef = collection(clientDb, collectionName);
+      const today = new Date().toISOString().split('T')[0];
+
+      const pendingQuery = query(queueRef, where('status', '==', 'pending'));
+      const snap = await getDocs(pendingQuery);
+
+      const allBacklog = snap.docs
+        .map(d => d.data())
+        .filter(l => l.dispatchDate !== today);
+
+      if (!allBacklog.length) {
+        alert('No backlog leads to export.');
+        return;
+      }
+
+      const header = ['"Business Name"', '"Business Type"', '"Location"', '"Phone Number"'];
+      const rows = allBacklog.map(l => {
+        const name = (l.name || '').replace(/"/g, '""');
+        const type = (l.businessType || '').replace(/"/g, '""');
+        const loc = (l.city || '').replace(/"/g, '""');
+        const phone = (l.phone || '').replace(/"/g, '""');
+        return `"${name}","${type}","${loc}","${phone}"`;
+      });
+
+      const csvContent = [header.join(','), ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backlog_${market}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting backlog CSV:', err);
+      alert('Failed to export CSV. Please try again.');
+    }
+  };
+
+  // Handle injecting leads to US queue
+  const handleInjectLeads = async () => {
+    setInjectLoading(true);
+    setInjectResult(null);
+    try {
+      let leads: { name: string; type: string; phone: string }[] = [];
+
+      if (injectMode === 'single') {
+        if (!injectName.trim() || !injectPhone.trim()) {
+          setInjectResult({ success: false, message: 'Please fill in both Business Name and Phone Number.' });
+          setInjectLoading(false);
+          return;
+        }
+        leads = [{ name: injectName.trim(), type: injectType.trim() || 'Business', phone: injectPhone.trim() }];
+      } else {
+        // JSON mode
+        let parsed: any[];
+        try {
+          parsed = JSON.parse(injectJson.trim());
+          if (!Array.isArray(parsed)) throw new Error('Not an array');
+        } catch {
+          setInjectResult({ success: false, message: 'Invalid JSON. Paste a valid JSON array.' });
+          setInjectLoading(false);
+          return;
+        }
+        leads = parsed.map((item: any) => ({
+          name: String(item.name || ''),
+          type: String(item.type || 'Business'),
+          phone: String(item.phone || ''),
+        })).filter(l => l.name && l.phone);
+
+        if (!leads.length) {
+          setInjectResult({ success: false, message: 'No valid leads found in JSON (name + phone required).' });
+          setInjectLoading(false);
+          return;
+        }
+      }
+
+      const result = await injectLeadsToUSQueue(leads, injectWindow);
+      if (result.success) {
+        setInjectResult({ success: true, message: `✅ ${result.count} lead${result.count === 1 ? '' : 's'} added to the ${injectWindow} queue.` });
+        // Reset form
+        setInjectName('');
+        setInjectPhone('');
+        setInjectType('');
+        setInjectJson('');
+        // Refresh stats
+        fetchLeadStats();
+      } else {
+        setInjectResult({ success: false, message: `Failed: ${result.error}` });
+      }
+    } catch (err: any) {
+      setInjectResult({ success: false, message: `Error: ${err.message}` });
+    } finally {
+      setInjectLoading(false);
+    }
   };
 
 
@@ -490,7 +590,6 @@ export function MonitorClient() {
   }, [status.status, market]);
 
   // Fetch dispatch config
-  // Fetch dispatch config
   const fetchConfig = async () => {
     setConfigLoading(true);
     setConfigError(null);
@@ -499,10 +598,13 @@ export function MonitorClient() {
       const res = await fetch(`${workerUrl}/config/dispatch?market=${market}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      // Save lead statistics if present
+      if (data.leadStats) setLeadStats(data.leadStats);
       setDispatchConfig(data);
     } catch (err: any) {
-      console.error("Failed to fetch config:", err);
-      setConfigError(`Failed to load config from ${workerUrl}. ${err.message}`);
+      // Worker VM may not be reachable from the browser — treat as non-fatal.
+      // Don't set configError so the UI doesn't show a red error state.
+      console.warn("Worker config unavailable (this is normal if worker VM is not local):", err.message);
     } finally {
       setConfigLoading(false);
     }
@@ -1230,7 +1332,182 @@ export function MonitorClient() {
             <span className="text-[10px] font-bold tracking-wider">BACKLOG</span>
           </button>
         </div>
+        <div className="grid grid-cols-4 gap-3 mt-2">
+            {/* Export CSV Button */}
+            <button
+              onClick={exportBacklogCSV}
+              disabled={!leadStats || (leadStats.backlog ?? 0) === 0}
+              className={`group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 disabled:opacity-30 col-span-2 ${
+                leadStats && (leadStats.backlog ?? 0) > 0
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20 hover:border-green-500/30'
+                  : 'bg-zinc-800/50 text-zinc-600 border-zinc-700/50 hover:bg-zinc-800'
+              }`}
+            >
+              <Package className="w-4 h-4 fill-current opacity-70" />
+              <span className="text-[10px] font-bold tracking-wider">EXPORT CSV ({leadStats?.backlog ?? 0})</span>
+            </button>
+
+            {/* Inject Leads Button — US only */}
+            {market === 'US' && (
+              <button
+                onClick={() => { setShowInjectModal(true); setInjectResult(null); }}
+                className="group relative flex items-center justify-center gap-2 p-3 rounded-xl border transition-all duration-300 col-span-2 bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20 hover:border-violet-500/30"
+              >
+                <Zap className="w-4 h-4" />
+                <span className="text-[10px] font-bold tracking-wider">INJECT LEADS</span>
+              </button>
+            )}
+        </div>
       </div>
+
+
+
+      {/* Inject Leads Modal — US only */}
+      {showInjectModal && market === 'US' && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 rounded-2xl p-6 max-w-lg w-full border border-zinc-800 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-violet-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-100">Inject Leads — US Queue</h3>
+                  <p className="text-[10px] text-zinc-500">Add contacts directly to today's dispatch queue</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowInjectModal(false)}
+                className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mode toggle */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setInjectMode('single')}
+                className={`flex-1 py-2 rounded-xl text-[11px] font-bold tracking-wider border transition-all ${
+                  injectMode === 'single'
+                    ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                    : 'bg-zinc-800/50 text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
+                }`}
+              >
+                SINGLE LEAD
+              </button>
+              <button
+                onClick={() => setInjectMode('json')}
+                className={`flex-1 py-2 rounded-xl text-[11px] font-bold tracking-wider border transition-all ${
+                  injectMode === 'json'
+                    ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                    : 'bg-zinc-800/50 text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
+                }`}
+              >
+                BULK JSON
+              </button>
+            </div>
+
+            {/* Time window */}
+            <div className="mb-4">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 block">Dispatch Window</label>
+              <div className="flex gap-2">
+                {(['morning', 'lunch', 'evening'] as const).map(win => (
+                  <button
+                    key={win}
+                    onClick={() => setInjectWindow(win)}
+                    className={`flex-1 py-2 rounded-xl text-[11px] font-bold tracking-wider border capitalize transition-all ${
+                      injectWindow === win
+                        ? win === 'morning' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                          : win === 'lunch' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                        : 'bg-zinc-800/50 text-zinc-500 border-zinc-700/50 hover:border-zinc-600'
+                    }`}
+                  >
+                    {win === 'morning' ? '🌅' : win === 'lunch' ? '☀️' : '🌙'} {win}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Single mode fields */}
+            {injectMode === 'single' ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 block">Business Name *</label>
+                  <input
+                    value={injectName}
+                    onChange={e => setInjectName(e.target.value)}
+                    placeholder="e.g. Crane Yoga Studio"
+                    className="w-full bg-zinc-800/60 border border-zinc-700/50 rounded-xl px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-violet-500/50 focus:bg-zinc-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 block">Business Type</label>
+                  <input
+                    value={injectType}
+                    onChange={e => setInjectType(e.target.value)}
+                    placeholder="e.g. Yoga Studio"
+                    className="w-full bg-zinc-800/60 border border-zinc-700/50 rounded-xl px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-violet-500/50 focus:bg-zinc-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 block">Phone Number *</label>
+                  <input
+                    value={injectPhone}
+                    onChange={e => setInjectPhone(e.target.value)}
+                    placeholder="e.g. +17186780999"
+                    className="w-full bg-zinc-800/60 border border-zinc-700/50 rounded-xl px-3 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-violet-500/50 focus:bg-zinc-800"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 block">
+                  JSON Array <span className="text-zinc-600 normal-case font-normal">(name, type, phone)</span>
+                </label>
+                <textarea
+                  value={injectJson}
+                  onChange={e => setInjectJson(e.target.value)}
+                  placeholder={'[{"name": "Crane Yoga Studio", "type": "Yoga studio", "phone": "+17186780999"}, ...]'}
+                  rows={8}
+                  className="w-full bg-zinc-800/60 border border-zinc-700/50 rounded-xl px-3 py-2.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-violet-500/50 focus:bg-zinc-800 font-mono resize-none"
+                />
+              </div>
+            )}
+
+            {/* Result feedback */}
+            {injectResult && (
+              <div className={`mt-3 px-3 py-2.5 rounded-xl text-xs font-medium border ${
+                injectResult.success
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                  : 'bg-red-500/10 text-red-400 border-red-500/20'
+              }`}>
+                {injectResult.message}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setShowInjectModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-zinc-400 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition-all"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleInjectLeads}
+                disabled={injectLoading}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-violet-300 bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {injectLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                {injectLoading ? 'Adding...' : 'Add to Queue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
 
 
