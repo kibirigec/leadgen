@@ -1,7 +1,26 @@
+# ─── Stage 1: Install dependencies ───────────────────────────────────────────
+FROM node:20-slim AS deps
 
-FROM node:20-slim AS base
+WORKDIR /app
 
-# Install dependencies for Chrome
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# ─── Stage 2: Build Next.js ───────────────────────────────────────────────────
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# ─── Stage 3: Production runner ───────────────────────────────────────────────
+FROM node:20-slim AS runner
+
+# Install Chrome for any server-side Puppeteer use
 RUN apt-get update \
     && apt-get install -y wget gnupg \
     && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/googlechrome-linux-keyring.gpg \
@@ -13,21 +32,19 @@ RUN apt-get update \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci
+# Copy only what Next.js needs to run
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
-# Copy source
-COPY . .
-
-# Build
-RUN npm run build
-
-# Expose port
 EXPOSE 3000
 
-# Start
-CMD ["npm", "start"]
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]

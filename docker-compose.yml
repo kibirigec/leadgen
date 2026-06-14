@@ -1,0 +1,115 @@
+services:
+
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: leadgen_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-leads_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scraper/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - leadgen_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: leadgen_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - leadgen_net
+
+  # ── Application services ────────────────────────────────────────────────────
+
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: leadgen_webapp
+    env_file: .env
+    environment:
+      # Override DB/Redis to point at Docker service names
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - leadgen_net
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: leadgen_worker
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379
+      HEADLESS: "true"
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Persist WhatsApp session across container restarts
+      - wweb_session:/app/.wweb_session
+    restart: unless-stopped
+    networks:
+      - leadgen_net
+
+  scraper:
+    build:
+      context: .
+      dockerfile: scraper/Dockerfile
+    container_name: leadgen_scraper
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      BROWSER_HEADLESS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Scraper runs once and exits — remove 'restart' so it doesn't loop
+    profiles:
+      - scraper
+    networks:
+      - leadgen_net
+
+volumes:
+  pgdata:
+  redisdata:
+  wweb_session:
+
+networks:
+  leadgen_net:
+    driver: bridge

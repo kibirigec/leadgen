@@ -29,6 +29,20 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## US-only Email Automation
+
+A new feature branch `feat/email-automation-us` implements an email automation system restricted to US recipients.
+
+Quickstart (development, dry-run):
+
+1. Install dependencies: npm install
+2. Copy environment variables: cp .env.example .env
+3. Keep ENABLE_EMAIL_US=false to avoid sending real emails. The system will log sends rather than perform them.
+4. To enable real sends (use with caution): set ENABLE_EMAIL_US=true and provide SENDGRID_API_KEY and EMAIL_FROM in your environment.
+
+See `src/lib/email` for implementation details: providers, templates, queue, scheduler, and region filters.
+
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
@@ -65,3 +79,63 @@ Deployment notes:
 - Ensure SENDGRID_API_KEY and ENABLE_EMAIL_US are set securely in production environment only when intended.
 - Use rate limiting and a queue-backed worker (REDIS_URL) to avoid SendGrid throttling.
 
+## US Hospitality Lead Scraper
+
+A multi-platform scraper to find small US hospitality businesses without a direct booking website.
+
+### Prerequisites
+- Node.js 20+
+- PostgreSQL 14+
+- Playwright dependencies: `npx playwright install-deps chromium`
+
+### Installation
+```bash
+npm install
+npx playwright install chromium
+```
+
+### Database Setup & Local Testing
+We use Docker Compose to spin up a local PostgreSQL database that mirrors production.
+
+1. Start the database:
+```bash
+npm run db:up
+```
+*(This automatically creates the required schema on first start via `schema.sql`)*
+
+2. Run the test scraper script:
+```bash
+npm run scrape:test
+```
+*(This runs a fast, dry-run scrape against a small target and outputs a table summary)*
+
+3. Stop the database when done:
+```bash
+npm run db:down
+```
+
+### Integration Example
+```javascript
+import { runScraper, getStats, getLeadsForOutreach, updateOutreachStatus } from './scraper/index.js';
+
+// Run scraper
+const result = await runScraper({
+  targets: [
+    { source: 'google_maps', query: 'bed and breakfast Nashville Tennessee' }
+  ],
+  maxResultsPerTarget: 80,
+  dryRun: false
+});
+
+// Fetch leads ready for outreach
+const leads = await getLeadsForOutreach({ minScore: 50, emailOnly: true, limit: 50 });
+```
+
+### Extending / Adding a City
+Pass new targets into the `runScraper` `config.targets` array with the target city and state.
+
+### Implementation Notes & Assumptions
+- **Airbnb, VRBO, Booking.com**: Fully fleshed out modules would require very complex selectors for each platform. The provided structures implement the correct integration layout, but selectors in `tripadvisor.js` and others may need adjustment as the platforms update their DOM classes. 
+- **Website Filter**: The scraper looks for standard booking engine scripts or keywords like "book now". Very obscure booking engines might pass the filter until added to `website-checker.js`.
+- **Database Schema**: Ensure the `pg` driver is configured with the correct `search_path` or default schema if `leads` is not in `public`.
+- **ES Modules**: `package.json` was updated to `"type": "module"`. Ensure any existing Next.js config files work (e.g., `jest.config.js` might need to be renamed to `.cjs`).
