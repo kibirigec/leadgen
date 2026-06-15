@@ -54,8 +54,8 @@ export async function runDispatch(
     let freshQuery = db.collection(collectionName)
         .where('timeWindow', '==', window)
         .where('dispatchDate', '==', today)
-        .where('status', '==', 'pending')
-        .where('market', '==', market);
+        .where('status', '==', 'pending');
+        // Collection itself implies market since we use collectionName
 
     if (filters?.businessType) freshQuery = freshQuery.where('businessType', '==', filters.businessType);
     if (filters?.location) freshQuery = freshQuery.where('city', '==', filters.location);
@@ -145,8 +145,8 @@ export async function runDispatch(
         const gap = targetLimit - collectedLeads.length;
         log('info', `Step 3: Still short (${gap}). Checking Reserve Pool...`);
 
-        // Pass filters to reserve pool
-        const reserveLeads = await pullFromReservePool(window, gap, filters);
+        // Pass filters and market to reserve pool
+        const reserveLeads = await pullFromReservePool(window, gap, filters, market);
 
         if (reserveLeads.length > 0) {
             log('info', `  Pulled ${reserveLeads.length} leads from Reserve Pool. Adding to queue...`);

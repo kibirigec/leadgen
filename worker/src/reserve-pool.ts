@@ -7,6 +7,7 @@
 
 import { getDb } from './firebase';
 import { normalizePhone } from '../../shared/phone-utils';
+import { Market } from '../../shared/types';
 
 export type TimeWindow = 'morning' | 'lunch' | 'evening';
 
@@ -49,13 +50,14 @@ export function calculatePriority(lead: {
 /**
  * Add leads to reserve pool
  */
-export async function addToReservePool(leads: Omit<ReservePoolLead, 'status'>[]): Promise<number> {
+export async function addToReservePool(leads: Omit<ReservePoolLead, 'status'>[], market: Market = 'UG'): Promise<number> {
     const db = getDb();
     let count = 0;
+    const collectionName = market === 'US' ? 'reserve_pool_US' : 'reserve_pool';
 
     for (const lead of leads) {
-        const docId = normalizePhone(lead.phone);
-        await db.collection('reserve_pool').doc(docId).set({
+        const docId = normalizePhone(lead.phone, market);
+        await db.collection(collectionName).doc(docId).set({
             ...lead,
             status: 'available',
         }, { merge: true });
@@ -72,11 +74,13 @@ export async function addToReservePool(leads: Omit<ReservePoolLead, 'status'>[])
 export async function pullFromReservePool(
     timeWindow: TimeWindow,
     limit: number,
-    filters?: { businessType?: string; location?: string }
+    filters?: { businessType?: string; location?: string },
+    market: Market = 'UG'
 ): Promise<ReservePoolLead[]> {
     const db = getDb();
+    const collectionName = market === 'US' ? 'reserve_pool_US' : 'reserve_pool';
 
-    let query = db.collection('reserve_pool')
+    let query = db.collection(collectionName)
         .where('timeWindow', '==', timeWindow)
         .where('status', '==', 'available');
 
@@ -101,7 +105,7 @@ export async function pullFromReservePool(
 
     // Mark as used
     for (const lead of leads) {
-        await db.collection('reserve_pool').doc(lead.id!).update({
+        await db.collection(collectionName).doc(lead.id!).update({
             status: 'used',
             usedAt: new Date().toISOString(),
         });
@@ -114,7 +118,7 @@ export async function pullFromReservePool(
 /**
  * Get reserve pool stats
  */
-export async function getReservePoolStats(): Promise<{
+export async function getReservePoolStats(market: Market = 'UG'): Promise<{
     morning: number;
     lunch: number;
     evening: number;
@@ -123,8 +127,10 @@ export async function getReservePoolStats(): Promise<{
     const db = getDb();
     const stats = { morning: 0, lunch: 0, evening: 0, total: 0 };
 
+    const collectionName = market === 'US' ? 'reserve_pool_US' : 'reserve_pool';
+
     for (const window of ['morning', 'lunch', 'evening'] as TimeWindow[]) {
-        const count = await db.collection('reserve_pool')
+        const count = await db.collection(collectionName)
             .where('timeWindow', '==', window)
             .where('status', '==', 'available')
             .count()

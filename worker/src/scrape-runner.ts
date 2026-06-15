@@ -265,7 +265,7 @@ export async function runScrape(
                     ...l,
                     scrapedAt: new Date().toISOString(),
                     hasWebsite: !!l.website,
-                })));
+                })), market);
                 totalReserve += excessLeads.length;
             }
         }
