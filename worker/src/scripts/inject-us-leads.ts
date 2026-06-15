@@ -27,32 +27,52 @@ const leads = [
   { "name": "Ostreni Barber Shop", "type": "Barber shop", "phone": "+16462861824" }
 ];
 
+const typeMap: Record<string, string> = {
+    "Yoga studio": "gym",
+    "Barber shop": "salon",
+    "Auto repair shop": "mechanic",
+    "Mechanic": "mechanic",
+    "Nail salon": "salon",
+    "Plumber": "plumber",
+    "Electrician": "electrician",
+    "Hair salon": "salon",
+    "Beauty salon": "salon",
+    "Hair replacement service": "salon",
+    "Tire repair shop": "mechanic"
+};
+
 async function injectLeads() {
     await initializeFirebase();
     const db = getDb();
     const today = new Date().toISOString().split('T')[0];
     
+    console.log(`Clearing old manual injections...`);
+    const oldDocs = await db.collection('leads_queue_US').where('source', '==', 'manual_inject').get();
+    for (const doc of oldDocs.docs) {
+        await doc.ref.delete();
+    }
+    
     console.log(`Injecting ${leads.length} leads into leads_queue_US...`);
     let count = 0;
     
     for (const lead of leads) {
-        // Only target leads_queue_US because we isolated collections
+        const mappedType = typeMap[lead.type] || 'mechanic'; // default to mechanic if unknown
         await db.collection('leads_queue_US').add({
             name: lead.name,
             phone: lead.phone,
-            businessType: lead.type,
+            businessType: mappedType,
             timeWindow: 'morning',
             priority: 50,
             status: 'pending',
             dispatchDate: today,
-            market: 'US', // explicitly tagging it just in case
+            market: 'US',
             source: 'manual_inject',
             createdAt: new Date().toISOString(),
         });
         count++;
     }
     
-    console.log(`✅ Successfully injected ${count} leads into the morning window for today!`);
+    console.log(`✅ Successfully injected ${count} leads with corrected business types!`);
     process.exit(0);
 }
 
